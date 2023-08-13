@@ -51,11 +51,13 @@ Process finished with exit code 0
 
 ## Dependencies
 
-- `intel-mkl` [https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html](https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html)
-- `re2` [https://github.com/google/re2](https://github.com/google/re2)
-- `abseil-cpp` [https://github.com/abseil/abseil-cpp](https://github.com/abseil/abseil-cpp)
-- `json11` [https://github.com/dropbox/json11](https://github.com/dropbox/json11)
-
+- GEMM acceleration
+  - `intel-mkl` [https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html](https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html)
+- Json parser
+  - `json11` [https://github.com/dropbox/json11](https://github.com/dropbox/json11)
+- Tokenizer regular matching
+  - `re2` [https://github.com/google/re2](https://github.com/google/re2)
+  - `abseil-cpp` [https://github.com/abseil/abseil-cpp](https://github.com/abseil/abseil-cpp)
 
 ## License
 
