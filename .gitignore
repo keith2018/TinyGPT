@@ -1,0 +1,11 @@
+.DS_Store
+.idea/
+.vs/
+/app/bin
+/bin
+out
+build
+cmake-build-*/
+CMakeSettings.json
+
+assets/gpt2/model_file.data
