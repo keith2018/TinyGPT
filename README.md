@@ -38,15 +38,13 @@ cmake --build ./build --config Release
 This will generate the executable file and copy assets to directory `app/bin`, then you can run the demo:
 
 ```bash
-cd app/bin/Release
+cd app/bin
 ./TinyGPT_demo
 [DEBUG] TIMER TinyGPT::Model::loadModelGPT2: cost: 800 ms
 [DEBUG] TIMER TinyGPT::Encoder::getEncoder: cost: 191 ms
 INPUT:Alan Turing theorized that computers would one day become
 GPT:the most powerful machines on the planet.
 INPUT:exit
-
-Process finished with exit code 0
 ```
 
 ## Dependencies
