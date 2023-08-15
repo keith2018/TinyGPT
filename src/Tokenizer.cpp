@@ -12,6 +12,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <locale>
 #include <codecvt>
 
 namespace TinyGPT {

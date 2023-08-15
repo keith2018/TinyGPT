@@ -9,6 +9,8 @@
 #include "Algebra.h"
 
 #include <cassert>
+#include <cstring>
+#include <cmath>
 
 namespace TinyGPT {
 
@@ -673,7 +675,7 @@ Tensor operator/(const float &other, const Tensor &obj) {
 
 Tensor Tensor::sqrt(const Tensor &t) {
   TENSOR_CHECK_EMPTY(t, {})
-  TENSOR_MATH_FAST_LOOP_PAIR(t, =, std::sqrtf(ret[idx]))
+  TENSOR_MATH_FAST_LOOP_PAIR(t, =, std::sqrt(ret[idx]))
 }
 
 Tensor Tensor::tanh(const Tensor &t) {
@@ -683,7 +685,7 @@ Tensor Tensor::tanh(const Tensor &t) {
 
 Tensor Tensor::exp(const Tensor &t) {
   TENSOR_CHECK_EMPTY(t, {})
-  TENSOR_MATH_FAST_LOOP_PAIR(t, =, std::expf(ret[idx]))
+  TENSOR_MATH_FAST_LOOP_PAIR(t, =, std::exp(ret[idx]))
 }
 
 float Tensor::dot(const float &a, const float &b) {

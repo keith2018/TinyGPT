@@ -437,28 +437,28 @@ TEST(TEST_TENSOR, math_argmax) {
 TEST(TEST_TENSOR, math_sqrt) {
   Tensor x({{1, 2}, {3, 4}});
   auto y = Tensor::sqrt(x);
-  EXPECT_THAT(y.data(), ElementsAre(std::sqrtf(1),
-                                    std::sqrtf(2),
-                                    std::sqrtf(3),
-                                    std::sqrtf(4)));
+  EXPECT_THAT(y.data(), ElementsAre(std::sqrt(1),
+                                    std::sqrt(2),
+                                    std::sqrt(3),
+                                    std::sqrt(4)));
 }
 
 TEST(TEST_TENSOR, math_tanh) {
   Tensor x({{1, 2}, {3, 4}});
   auto y = Tensor::tanh(x);
-  EXPECT_NEAR(y.data()[0], std::tanhf(1), 1e-4);
-  EXPECT_NEAR(y.data()[1], std::tanhf(2), 1e-4);
-  EXPECT_NEAR(y.data()[2], std::tanhf(3), 1e-4);
-  EXPECT_NEAR(y.data()[3], std::tanhf(4), 1e-4);
+  EXPECT_NEAR(y.data()[0], std::tanh(1), 1e-4);
+  EXPECT_NEAR(y.data()[1], std::tanh(2), 1e-4);
+  EXPECT_NEAR(y.data()[2], std::tanh(3), 1e-4);
+  EXPECT_NEAR(y.data()[3], std::tanh(4), 1e-4);
 }
 
 TEST(TEST_TENSOR, math_exp) {
   Tensor x({{1, 2}, {3, 4}});
   auto y = Tensor::exp(x);
-  EXPECT_THAT(y.data(), ElementsAre(std::expf(1),
-                                    std::expf(2),
-                                    std::expf(3),
-                                    std::expf(4)));
+  EXPECT_THAT(y.data(), ElementsAre(std::exp(1),
+                                    std::exp(2),
+                                    std::exp(3),
+                                    std::exp(4)));
 }
 
 TEST(TEST_TENSOR, math_dot) {
