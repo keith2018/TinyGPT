@@ -53,12 +53,22 @@ Tensor Model::attention(const Tensor &q, const Tensor &k, const Tensor &v, const
   return Tensor::matmul(softmax(x), v);
 }
 
-Tensor Model::multiHeadAttention(const Tensor &x, const Conv1D &attn, const Conv1D &proj, uint32_t head) {
+Tensor Model::multiHeadAttention(const Tensor &x, const Conv1D &attn, const Conv1D &proj, uint32_t head, KVCache &cache) {
   // qkv projection
   auto xx = linear(x, attn.w, attn.b);
 
   // split into qkv
   auto qkv = Tensor::split(xx, 3, -1);
+
+  bool useCache = !cache.empty();
+  if (useCache) {
+    std::vector<Tensor> kStack = {cache[0], qkv[1]};
+    std::vector<Tensor> vStack = {cache[1], qkv[2]};
+    qkv[1] = Tensor::vstack({begin(kStack), end(kStack)});
+    qkv[2] = Tensor::vstack({begin(vStack), end(vStack)});
+  }
+
+  cache = {qkv[1], qkv[2]};
 
   // split into heads
   std::vector<std::vector<Tensor>> qkvHeads;
@@ -68,7 +78,12 @@ Tensor Model::multiHeadAttention(const Tensor &x, const Conv1D &attn, const Conv
   }
 
   // causal mask to hide future inputs from being attended to
-  auto causalMask = (1 - Tensor::tri(xx.shape()[0])) * -1e10;
+  Tensor causalMask;
+  if (useCache) {
+    causalMask = Tensor::zeros({1, qkv[1].shape()[0]});
+  } else {
+    causalMask = (1 - Tensor::tri(xx.shape()[0])) * -1e10;
+  }
 
   // perform attention over each head
   std::vector<Tensor> outHeads;
@@ -86,10 +101,10 @@ Tensor Model::multiHeadAttention(const Tensor &x, const Conv1D &attn, const Conv
   return xx;
 }
 
-Tensor Model::transformerBlock(const Tensor &x, const TransformerBlock &block, uint32_t head) {
+Tensor Model::transformerBlock(const Tensor &x, const TransformerBlock &block, uint32_t head, KVCache &cache) {
   // multi-head causal self attention
   auto norm = layerNorm(x, block.ln_1.g, block.ln_1.b);
-  auto xx = x + multiHeadAttention(norm, block.attn.c_attn, block.attn.c_proj, head);
+  auto xx = x + multiHeadAttention(norm, block.attn.c_attn, block.attn.c_proj, head, cache);
 
   // position-wise feed forward network
   norm = layerNorm(xx, block.ln_2.g, block.ln_2.b);
@@ -97,13 +112,23 @@ Tensor Model::transformerBlock(const Tensor &x, const TransformerBlock &block, u
   return xx;
 }
 
-Tensor Model::gpt2(const std::vector<int32_t> &inputs, const GPT2::Params &params, uint32_t head) {
+Tensor Model::gpt2(const std::vector<int32_t> &inputs, const GPT2::Params &params, uint32_t head, std::vector<KVCache> &cache) {
+  bool useCache = !cache.empty();
+
   // token + positional embeddings
-  auto x = params.wte[inputs] + params.wpe[Tensor::range(0, (int32_t) inputs.size())];
+  Tensor x;
+  if (useCache) {
+    std::vector<int32_t> wteIdx = {inputs.back()};
+    std::vector<int32_t> wpeIdx = {(int32_t) inputs.size() - 1};
+    x = params.wte[wteIdx] + params.wpe[wpeIdx];
+  } else {
+    cache.resize(params.blocks.size());
+    x = params.wte[inputs] + params.wpe[Tensor::range(0, (int32_t) inputs.size())];
+  }
 
   // forward pass through n_layer transformer blocks
-  for (auto &block : params.blocks) {
-    x = transformerBlock(x, block, head);
+  for (int i = 0; i < params.blocks.size(); i++) {
+    x = transformerBlock(x, params.blocks[i], head, cache[i]);
   }
 
   // projection to vocab
@@ -113,10 +138,11 @@ Tensor Model::gpt2(const std::vector<int32_t> &inputs, const GPT2::Params &param
 
 void Model::generate(std::vector<int32_t> &tokens, const GPT2::Params &params, uint32_t head,
                      uint32_t maxTokens, const std::function<bool(int32_t token)> &callback) {
+  std::vector<KVCache> cache;
   // auto-regressive decode loop
   for (uint32_t tokenCnt = 0; tokenCnt < maxTokens; tokenCnt++) {
     // model forward pass
-    auto logits = gpt2(tokens, params, head);
+    auto logits = gpt2(tokens, params, head, cache);
     // greedy sampling
     auto nextId = (int32_t) Tensor::argmax(logits[std::vector<int32_t>{-1}]);
     // append prediction to input

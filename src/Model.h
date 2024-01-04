@@ -53,6 +53,8 @@ struct GPT2 {
   } params;
 };
 
+typedef std::vector<Tensor> KVCache;
+
 class Model {
  public:
   static Tensor gelu(const Tensor &x);
@@ -62,10 +64,10 @@ class Model {
 
   static Tensor feadForward(const Tensor &x, const Conv1D &fc, const Conv1D &proj);
   static Tensor attention(const Tensor &q, const Tensor &k, const Tensor &v, const Tensor &mask);
-  static Tensor multiHeadAttention(const Tensor &x, const Conv1D &attn, const Conv1D &proj, uint32_t head);
-  static Tensor transformerBlock(const Tensor &x, const TransformerBlock &block, uint32_t head);
+  static Tensor multiHeadAttention(const Tensor &x, const Conv1D &attn, const Conv1D &proj, uint32_t head, KVCache &cache);
+  static Tensor transformerBlock(const Tensor &x, const TransformerBlock &block, uint32_t head, KVCache &cache);
 
-  static Tensor gpt2(const std::vector<int32_t> &inputs, const GPT2::Params &params, uint32_t head);
+  static Tensor gpt2(const std::vector<int32_t> &inputs, const GPT2::Params &params, uint32_t head, std::vector<KVCache> &cache);
 
  public:
   static bool loadModelGPT2(GPT2 &gpt2, const char *hparams, const char *modelDict);
