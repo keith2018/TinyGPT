@@ -447,10 +447,14 @@ class TensorIter {
 
  protected:
   // reorder array
-  static void reorder(int32_t *v, std::vector<uint32_t> const &order) {
-    for (uint32_t s = 1, d; s < order.size(); ++s) {
-      for (d = order[s]; d < s; d = order[d]);
-      if (d == s) while (d = order[d], d != s) std::swap(v[s], v[d]);
+  static void reorder(int32_t *v, const std::vector<int32_t> &order) {
+    auto n = order.size();
+    std::vector<int32_t> temp(n);
+    for (int i = 0; i < n; ++i) {
+      temp[i] = v[order[i]];
+    }
+    for (int i = 0; i < n; ++i) {
+      v[i] = temp[i];
     }
   }
 
