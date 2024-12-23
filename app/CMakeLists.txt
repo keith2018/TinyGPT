@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.3)
 project(TinyGPT_demo)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 if (CMAKE_BUILD_TYPE STREQUAL Debug)
     add_definitions(-DDEBUG)
 endif ()

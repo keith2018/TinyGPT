@@ -120,10 +120,10 @@ Tensor Model::gpt2(const std::vector<int32_t> &inputs, const GPT2::Params &param
   if (useCache) {
     std::vector<int32_t> wteIdx = {inputs.back()};
     std::vector<int32_t> wpeIdx = {(int32_t) inputs.size() - 1};
-    x = params.wte[wteIdx] + params.wpe[wpeIdx];
+    x = params.wte.index(wteIdx) + params.wpe.index(wpeIdx);
   } else {
     cache.resize(params.blocks.size());
-    x = params.wte[inputs] + params.wpe[Tensor::range(0, (int32_t) inputs.size())];
+    x = params.wte.index(inputs) + params.wpe.index(Tensor::range(0, (int32_t) inputs.size()));
   }
 
   // forward pass through n_layer transformer blocks
@@ -144,7 +144,7 @@ void Model::generate(std::vector<int32_t> &tokens, const GPT2::Params &params, u
     // model forward pass
     auto logits = gpt2(tokens, params, head, cache);
     // greedy sampling
-    auto nextId = (int32_t) Tensor::argmax(logits[std::vector<int32_t>{-1}]);
+    auto nextId = (int32_t) Tensor::argmax(logits.index(std::vector<int32_t>{-1}));
     // append prediction to input
     tokens.emplace_back(nextId);
 
@@ -210,10 +210,10 @@ bool Model::loadModelGPT2(GPT2 &gpt2, const char *hparams, const char *modelDict
 }
 
 void Model::loadTensor(Tensor &ret, std::fstream &fin, const json11::Json &json) {
-  ret.reshape(getShape(json));
+  ret = Tensor::shape(getShape(json));
   uint32_t pos = json["pos"].int_value();
   fin.seekg(pos, std::ios::beg);
-  fin.read((char *) &ret.data()[0], std::streamsize(sizeof(float) * ret.size()));
+  fin.read((char *) &ret[0], std::streamsize(sizeof(float) * ret.size()));
 }
 
 void Model::loadConv1D(Conv1D &ret, std::fstream &fin, const json11::Json &json) {
