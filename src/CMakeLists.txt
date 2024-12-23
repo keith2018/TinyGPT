@@ -20,7 +20,7 @@ file(GLOB_RECURSE TinyGPT_src "./*.cpp" "./*.h")
 if (MSVC)
     set_source_files_properties(${TinyGPT_src} PROPERTIES COMPILE_FLAGS "/WX")
 else ()
-    set_source_files_properties(${TinyGPT_src} PROPERTIES COMPILE_FLAGS "-Werror")
+    set_source_files_properties(${TinyGPT_src} PROPERTIES COMPILE_FLAGS "-Werror -Wno-deprecated-declarations")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 endif ()
 
@@ -35,6 +35,17 @@ target_include_directories(${PROJECT_NAME} PRIVATE
         ${THIRD_PARTY_DIR}/re2
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE
-        re2::re2 MKL::MKL
-)
+if (MSVC)
+    set(MKL_ARCH intel64)
+    set(MKL_LINK static)
+    set(MKL_THREADING intel_thread)
+    find_package(MKL CONFIG REQUIRED)
+    target_link_libraries(${PROJECT_NAME}
+            re2::re2 MKL::MKL
+    )
+endif ()
+
+if (APPLE)
+    find_library(ACCELERATE_LIBRARY Accelerate)
+    target_link_libraries(${PROJECT_NAME} re2::re2 ${ACCELERATE_LIBRARY})
+endif ()

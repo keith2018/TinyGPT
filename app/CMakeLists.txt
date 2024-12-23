@@ -12,7 +12,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../src
         ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/json11
 )
-target_link_libraries(${PROJECT_NAME} MKL::MKL TinyGPT_lib)
+target_link_libraries(${PROJECT_NAME} TinyGPT_lib)
 
 if (MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++latest")

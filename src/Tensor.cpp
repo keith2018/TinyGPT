@@ -6,7 +6,7 @@
 
 #include "Tensor.h"
 #include "Logger.h"
-#include "Algebra.h"
+#include "Blas.h"
 
 #include <cassert>
 #include <cstring>
@@ -728,7 +728,7 @@ Tensor Tensor::dot(const Tensor &a, const Tensor &b) {
     }
     uint32_t n = b.shape()[1];
     Tensor ret = Tensor::shape({m, n});
-    Algebra::gemm(&ret[0], &a[0], &b[0], m, middle, n);
+    Blas::gemm(&ret[0], &a[0], &b[0], m, middle, n);
     return ret;
   }
 
@@ -804,10 +804,10 @@ Tensor Tensor::matmul(const Tensor &a, const Tensor &b) {
     auto strideA = m * k;
     auto strideB = k * n;
     for (uint32_t idx = 0; idx < iterRet.size(); idx++) {
-      Algebra::gemm(&retTensor[iterRet.next() * strideRet], &a[iterA.next() * strideA], &b[iterB.next() * strideB], m, k, n);
+      Blas::gemm(&retTensor[iterRet.next() * strideRet], &a[iterA.next() * strideA], &b[iterB.next() * strideB], m, k, n);
     }
   } else {
-    Algebra::gemm(&retTensor[0], &a[0], &b[0], m, k, n);
+    Blas::gemm(&retTensor[0], &a[0], &b[0], m, k, n);
     if (prependA) {
       retTensor.reshape({n});
     }
@@ -837,7 +837,7 @@ Tensor Tensor::matmulTrans(const Tensor &a, const Tensor &b) {
       return {};
     }
     Tensor retTensor = Tensor::shape({m, n});
-    Algebra::gemmTrans(&retTensor[0], &a[0], &b[0], m, k, n);
+    Blas::gemmTrans(&retTensor[0], &a[0], &b[0], m, k, n);
     return retTensor;
   }
 

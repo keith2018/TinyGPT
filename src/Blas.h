@@ -10,7 +10,7 @@
 
 namespace TinyGPT {
 
-class Algebra {
+class Blas {
  public:
 
   /**

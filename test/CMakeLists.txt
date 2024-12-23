@@ -15,7 +15,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/json11
         googletest/googlemock/include
 )
-target_link_libraries(${PROJECT_NAME} MKL::MKL TinyGPT_lib gtest_main)
+target_link_libraries(${PROJECT_NAME} TinyGPT_lib gtest_main)
 
 include(GoogleTest)
 
