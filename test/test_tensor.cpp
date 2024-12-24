@@ -302,6 +302,11 @@ TEST(TEST_TENSOR, math_same_shape) {
   EXPECT_THAT(y.toArray(), ElementsAre(0.5, 2.f / 3, 0.75, 0.8));
   y /= x1;
   EXPECT_THAT(y.toArray(), ElementsAre(0.5, 1.f / 3, 0.25, 0.2));
+
+  x1 = Tensor::scalar(1.f);
+  x2 = Tensor::scalar(2.f);
+  y = x1 - x2;
+  EXPECT_THAT(y.toArray(), ElementsAre(-1));
 }
 
 TEST(TEST_TENSOR, math_min) {

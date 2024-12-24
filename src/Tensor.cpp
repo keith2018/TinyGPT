@@ -65,9 +65,6 @@ std::default_random_engine RandomGenerator::randomEngine_;
   } while (0)
 
 #define TENSOR_MATH_BROADCAST_PAIR(op)                                         \
-  if (this->isScalar()) {                                                      \
-    return other op(*this)[0];                                                 \
-  }                                                                            \
   if (other.isScalar()) {                                                      \
     return *this op other[0];                                                  \
   }                                                                            \
@@ -1252,9 +1249,6 @@ Tensor Tensor::log(const Tensor &t) {
 
 Tensor Tensor::pow(const Tensor &other) const {
   TENSOR_CHECK_EMPTY_PAIR(*this, other, {});
-  if (this->isScalar()) {
-    return other.pow((*this)[0]);
-  }
   if (other.isScalar()) {
     return this->pow(other[0]);
   }
