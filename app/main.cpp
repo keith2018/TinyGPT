@@ -4,7 +4,6 @@
  *
  */
 
-#include "Logger.h"
 #include "Tokenizer.h"
 #include "Model.h"
 
@@ -27,7 +26,8 @@ int main() {
   GPT2 gpt2;
 
   // load model
-  bool ret = Model::loadModelGPT2(gpt2, GPT2_HPARAMS_PATH, GPT2_MODEL_DICT_PATH);
+  bool ret =
+      Model::loadModelGPT2(gpt2, GPT2_HPARAMS_PATH, GPT2_MODEL_DICT_PATH);
   if (!ret) {
     LOGE("load GPT2 model failed !");
     return -1;
@@ -50,24 +50,25 @@ int main() {
     }
 
     auto tokens = encoder.encode(inputStr);
-    auto maxTokens = MAX_GPT_TOKEN - (uint32_t) tokens.size();
+    auto maxTokens = MAX_GPT_TOKEN - tokens.size();
     bool skipHeadBlank = true;
 
     // generate answers
     std::printf("GPT:");
-    Model::generate(tokens, gpt2.params, gpt2.hparams.n_head, maxTokens, [&](int32_t token) -> bool {
-      if (skipHeadBlank && token == TOKEN_END_LINE) {
-        return false;
-      }
-      skipHeadBlank = false;
-      if (token == TOKEN_END_LINE) {
-        return true;
-      }
-      auto outputText = encoder.decode({token});
-      std::printf("%s", outputText.c_str());
-      std::fflush(stdout);
-      return false;
-    });
+    Model::generate(tokens, gpt2.params, gpt2.hparams.n_head, maxTokens,
+                    [&](float token) -> bool {
+                      if (skipHeadBlank && token == TOKEN_END_LINE) {
+                        return false;
+                      }
+                      skipHeadBlank = false;
+                      if (token == TOKEN_END_LINE) {
+                        return true;
+                      }
+                      auto outputText = encoder.decode({token});
+                      std::printf("%s", outputText.c_str());
+                      std::fflush(stdout);
+                      return false;
+                    });
     std::printf("\nINPUT:");
   }
 

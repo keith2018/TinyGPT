@@ -28,8 +28,10 @@ struct TransformerBlock {
     Conv1D c_attn;
     Conv1D c_proj;
   } attn;
+
   LayerNorm ln_1;
   LayerNorm ln_2;
+
   struct {
     Conv1D c_fc;
     Conv1D c_proj;
@@ -56,30 +58,59 @@ struct GPT2 {
 typedef std::vector<Tensor> KVCache;
 
 class Model {
- public:
-  static Tensor gelu(const Tensor &x);
-  static Tensor softmax(const Tensor &x);
-  static Tensor layerNorm(const Tensor &x, const Tensor &g, const Tensor &b, float eps = 1e-5);
-  static Tensor linear(const Tensor &x, const Tensor &w, const Tensor &b);
+public:
+  static Tensor gelu(const Tensor& x);
 
-  static Tensor feadForward(const Tensor &x, const Conv1D &fc, const Conv1D &proj);
-  static Tensor attention(const Tensor &q, const Tensor &k, const Tensor &v, const Tensor &mask);
-  static Tensor multiHeadAttention(const Tensor &x, const Conv1D &attn, const Conv1D &proj, uint32_t head, KVCache &cache);
-  static Tensor transformerBlock(const Tensor &x, const TransformerBlock &block, uint32_t head, KVCache &cache);
+  static Tensor softmax(const Tensor& x);
 
-  static Tensor gpt2(const std::vector<int32_t> &inputs, const GPT2::Params &params, uint32_t head, std::vector<KVCache> &cache);
+  static Tensor layerNorm(const Tensor& x, const Tensor& g, const Tensor& b,
+                          float eps = 1e-5);
 
- public:
-  static bool loadModelGPT2(GPT2 &gpt2, const char *hparams, const char *modelDict);
-  static void generate(std::vector<int32_t> &tokens, const GPT2::Params &params, uint32_t head,
-                       uint32_t maxTokens, const std::function<bool(int32_t token)> &callback);
+  static Tensor linear(const Tensor& x, const Tensor& w, const Tensor& b);
 
- private:
-  static void loadTensor(Tensor &ret, std::fstream &fin, const json11::Json &json);
-  static void loadConv1D(Conv1D &ret, std::fstream &fin, const json11::Json &json);
-  static void loadLayerNorm(LayerNorm &ret, std::fstream &fin, const json11::Json &json);
-  static void loadTransformerBlock(TransformerBlock &ret, std::fstream &fin, const json11::Json &json);
-  static Shape getShape(const json11::Json &json);
+  static Tensor feadForward(const Tensor& x, const Conv1D& fc,
+                            const Conv1D& proj);
+
+  static Tensor attention(const Tensor& q, const Tensor& k, const Tensor& v,
+                          const Tensor& mask);
+
+  static Tensor multiHeadAttention(const Tensor& x, const Conv1D& attn,
+                                   const Conv1D& proj, uint32_t head,
+                                   KVCache& cache);
+
+  static Tensor transformerBlock(const Tensor& x, const TransformerBlock& block,
+                                 uint32_t head, KVCache& cache);
+
+  static Tensor gpt2(const std::vector<float>& inputs,
+                     const GPT2::Params& params, uint32_t head,
+                     std::vector<KVCache>& cache);
+
+public:
+  static bool loadModelGPT2(GPT2& gpt2, const char* hparams,
+                            const char* modelDict);
+
+  static void generate(std::vector<float>& tokens, const GPT2::Params& params,
+                       uint32_t head,
+                       uint32_t maxTokens,
+                       const std::function<bool(float token)>& callback);
+
+private:
+  static void loadTensor(Tensor& ret, std::fstream& fin,
+                         const json11::Json& json);
+
+  static void loadConv1D(Conv1D& ret, std::fstream& fin,
+                         const json11::Json& json);
+
+  static void loadLayerNorm(LayerNorm& ret, std::fstream& fin,
+                            const json11::Json& json);
+
+  static void loadTransformerBlock(TransformerBlock& ret, std::fstream& fin,
+                                   const json11::Json& json);
+
+  static TinyTorch::Shape getShape(const json11::Json& json);
+
+private:
+  static TinyTorch::Device device_;
 };
 
 }

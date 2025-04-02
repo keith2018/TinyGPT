@@ -44,8 +44,8 @@ class Encoder {
           const std::vector<wstring_pair> &bpeMerges);
 
   std::wstring bpe(const std::wstring &token);
-  std::vector<int32_t> encode(const std::string &text);
-  std::string decode(const std::vector<int32_t> &tokens);
+  std::vector<float> encode(const std::string &text);
+  std::string decode(const std::vector<float> &tokens);
 
   static Encoder getEncoder(const std::string &modelsDir);
 

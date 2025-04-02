@@ -5,32 +5,32 @@
  */
 
 #include "Tokenizer.h"
-#include "Logger.h"
-#include "Timer.h"
-#include "FileUtils.h"
-#include "re2/re2.h"
 
 #include <fstream>
 #include <sstream>
 #include <locale>
 #include <codecvt>
 
+#include "FileUtils.h"
+#include "re2/re2.h"
+
 namespace TinyGPT {
 
 RE2 gEncoderPat_("('s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| "
-                 "?[^\\s\\p{L}\\p{N}]+|\\s+\\(?!\\S\\)|\\s+)");
+    "?[^\\s\\p{L}\\p{N}]+|\\s+\\(?!\\S\\)|\\s+)");
 
-std::wstring StringUtils::utf82wstring(const std::string &str) {
-  static std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+std::wstring StringUtils::utf82wstring(const std::string& str) {
+  static std::wstring_convert<std::codecvt_utf8<wchar_t> > conv;
   return conv.from_bytes(str);
 }
 
-std::string StringUtils::wstring2utf8(const std::wstring &str) {
-  static std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
+std::string StringUtils::wstring2utf8(const std::wstring& str) {
+  static std::wstring_convert<std::codecvt_utf8<wchar_t> > conv;
   return conv.to_bytes(str);
 }
 
-std::vector<std::wstring> StringUtils::split(const std::wstring &s, wchar_t delim) {
+std::vector<std::wstring> StringUtils::split(const std::wstring& s,
+                                             wchar_t delim) {
   std::wstringstream ss(s);
   std::wstring item;
   std::vector<std::wstring> elems;
@@ -40,31 +40,31 @@ std::vector<std::wstring> StringUtils::split(const std::wstring &s, wchar_t deli
   return elems;
 }
 
-Encoder::Encoder(const std::unordered_map<std::wstring, int32_t> &encoder,
-                 const std::vector<wstring_pair> &bpeMerges)
-    : Encoder() {
+Encoder::Encoder(const std::unordered_map<std::wstring, int32_t>& encoder,
+                 const std::vector<wstring_pair>& bpeMerges)
+  : Encoder() {
   encoder_ = encoder;
-  for (auto &kv : encoder_) {
+  for (auto& kv : encoder_) {
     decoder_.insert({kv.second, kv.first});
   }
   byteEncoder_ = bytesToUnicode();
-  for (auto &kv : byteEncoder_) {
+  for (auto& kv : byteEncoder_) {
     byteDecoder_.insert({kv.second, kv.first});
   }
   for (size_t idx = 0; idx < bpeMerges.size(); idx++) {
-    bpeRanks_.insert({bpeMerges[idx], (int32_t) idx});
+    bpeRanks_.insert({bpeMerges[idx], (int32_t)idx});
   }
   cache_.clear();
 }
 
-std::wstring Encoder::bpe(const std::wstring &token) {
+std::wstring Encoder::bpe(const std::wstring& token) {
   auto cacheItem = cache_.find(token);
   if (cacheItem != cache_.end()) {
     return cacheItem->second;
   }
 
   std::vector<std::wstring> word;
-  for (auto &c : token) {
+  for (auto& c : token) {
     word.emplace_back(1, c);
   }
 
@@ -76,7 +76,7 @@ std::wstring Encoder::bpe(const std::wstring &token) {
   while (true) {
     wstring_pair bigram;
     size_t minRank = SIZE_MAX;
-    for (auto &pair : pairs) {
+    for (auto& pair : pairs) {
       auto pairIt = bpeRanks_.find(pair);
       if (pairIt != bpeRanks_.end()) {
         size_t rank = pairIt->second;
@@ -113,7 +113,8 @@ std::wstring Encoder::bpe(const std::wstring &token) {
         break;
       }
 
-      if (word[i] == bigram.first && i < word.size() - 1 && word[i + 1] == bigram.second) {
+      if (word[i] == bigram.first && i < word.size() - 1 && word[i + 1] ==
+          bigram.second) {
         newWord.push_back(bigram.first + bigram.second);
         i += 2;
       } else {
@@ -138,8 +139,8 @@ std::wstring Encoder::bpe(const std::wstring &token) {
   return wordStr;
 }
 
-std::vector<int32_t> Encoder::encode(const std::string &text) {
-  std::vector<int32_t> ret;
+std::vector<float> Encoder::encode(const std::string& text) {
+  std::vector<float> ret;
   re2::StringPiece input(text);
   std::string token;
   while (RE2::FindAndConsume(&input, gEncoderPat_, &token)) {
@@ -148,17 +149,17 @@ std::vector<int32_t> Encoder::encode(const std::string &text) {
       wToken.push_back(byteEncoder_[b]);
     }
     auto bpeTokens = StringUtils::split(bpe(wToken), L' ');
-    for (auto &bpeToken : bpeTokens) {
-      ret.push_back(encoder_[bpeToken]);
+    for (auto& bpeToken : bpeTokens) {
+      ret.push_back(static_cast<float>(encoder_[bpeToken]));
     }
   }
   return ret;
 }
 
-std::string Encoder::decode(const std::vector<int32_t> &tokens) {
+std::string Encoder::decode(const std::vector<float>& tokens) {
   std::wstring text;
-  for (int32_t idx : tokens) {
-    text += decoder_[idx];
+  for (auto& idx : tokens) {
+    text += decoder_[static_cast<int32_t>(idx)];
   }
 
   std::string ret;
@@ -169,15 +170,16 @@ std::string Encoder::decode(const std::vector<int32_t> &tokens) {
   return ret;
 }
 
-Encoder Encoder::getEncoder(const std::string &modelsDir) {
-  FUNCTION_TIMED();
+Encoder Encoder::getEncoder(const std::string& modelsDir) {
   // read "encoder.json"
-  std::fstream encoderFile(modelsDir + FILE_SEP + GPT_ENCODER_JSON, std::ios::in);
+  std::fstream encoderFile(modelsDir + FILE_SEP + GPT_ENCODER_JSON,
+                           std::ios::in);
   if (!encoderFile.is_open()) {
     LOGE("open file failed: %s", GPT_ENCODER_JSON);
     return {};
   }
-  std::unordered_map<std::wstring, int32_t> encoderMap = loadEncoderMap(encoderFile);
+  std::unordered_map<std::wstring, int32_t> encoderMap = loadEncoderMap(
+      encoderFile);
 
   // read "vocab.bpe"
   std::fstream vocabFile(modelsDir + FILE_SEP + GPT_VOCAB_BPE, std::ios::in);
@@ -189,7 +191,8 @@ Encoder Encoder::getEncoder(const std::string &modelsDir) {
   return {encoderMap, bpeMerges};
 }
 
-std::vector<wstring_pair> Encoder::getPairs(const std::vector<std::wstring> &word) {
+std::vector<wstring_pair> Encoder::getPairs(
+    const std::vector<std::wstring>& word) {
   std::vector<wstring_pair> pairs;
   if (word.size() > 1) {
     auto previous = word[0];
@@ -226,21 +229,23 @@ std::unordered_map<int32_t, wchar_t> Encoder::bytesToUnicode() {
   return b2u;
 }
 
-std::unordered_map<std::wstring, int32_t> Encoder::loadEncoderMap(std::istream &in) {
+std::unordered_map<std::wstring, int32_t> Encoder::loadEncoderMap(
+    std::istream& in) {
   const auto json = FileUtils::parseJson(in);
   if (json.is_null()) {
     LOGE("parse file failed: %s", GPT_ENCODER_JSON);
     return {};
   }
   std::unordered_map<std::wstring, int32_t> encoderMap;
-  for (auto &kv : json.object_items()) {
-    encoderMap.insert({StringUtils::utf82wstring(kv.first), kv.second.int_value()});
+  for (auto& kv : json.object_items()) {
+    encoderMap.insert({StringUtils::utf82wstring(kv.first),
+                       kv.second.int_value()});
   }
 
   return encoderMap;
 }
 
-std::vector<wstring_pair> Encoder::loadVocabBpe(std::istream &in) {
+std::vector<wstring_pair> Encoder::loadVocabBpe(std::istream& in) {
   std::vector<wstring_pair> vocabBpe;
   std::string line;
   while (std::getline(in, line)) {
@@ -252,7 +257,7 @@ std::vector<wstring_pair> Encoder::loadVocabBpe(std::istream &in) {
     vocabBpe.emplace_back(
         StringUtils::utf82wstring(line.substr(0, sep)),
         StringUtils::utf82wstring(line.substr(sep + 1))
-    );
+        );
   }
 
   return vocabBpe;
