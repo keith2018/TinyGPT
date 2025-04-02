@@ -5,7 +5,6 @@ Accompanying blog post: [Write a GPT from scratch (TinyGPT)](https://robot9.me/w
 
 ## Core class
 
-- [`Tensor`](src/Tensor.h): Tensor class similar to the [numpy](https://numpy.org/doc/1.25/reference/routines.html) interface.
 - [`Model`](src/Model.h): GPT-2 model implementation with reference to [gpt2_pico.py](https://github.com/jaymody/picoGPT/blob/main/gpt2_pico.py).
 - [`Tokenizer`](src/Tokenizer.h): BPE tokenizer with exactly the same logic as GPT-2 [encoder.py](https://github.com/openai/gpt-2/blob/master/src/encoder.py).
 
@@ -18,18 +17,14 @@ Accompanying blog post: [Write a GPT from scratch (TinyGPT)](https://robot9.me/w
 git clone --recurse-submodules https://github.com/keith2018/TinyGPT.git
 ```
 
-### 2. Install Intel MKL(Math Kernel Library)
-
-Official website: [Intel®-Optimized Math Library for Numerical Computing on CPUs & GPUs](https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html)
-
-### 3. Download GPT-2 model file
+### 2. Download GPT-2 model file
     
 ```python
 python3 tools/download_gpt2_model.py
 ```
 if success, you'll see the file `model_file.data` in directory `assets/gpt2`
 
-### 4. Build and Run
+### 3. Build and Run
 
 ```bash
 mkdir build
@@ -51,8 +46,8 @@ INPUT:exit
 
 ## Dependencies
 
-- GEMM acceleration
-  - `intel-mkl` [https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html](https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html)
+- Tensor
+  - `TinyTorch` [https://github.com/keith2018/TinyTorch](https://github.com/keith2018/TinyTorch)
 - Json parser
   - `json11` [https://github.com/dropbox/json11](https://github.com/dropbox/json11)
 - Tokenizer regular matching

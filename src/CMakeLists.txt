@@ -11,19 +11,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(ABSL_PROPAGATE_CXX_STD ON)
 set(ABSL_ENABLE_INSTALL ON)
+set(CMAKE_INSTALL_PREFIX "/usr/local/tiny")
+set(BUILD_TEST OFF)
 
 add_subdirectory(${THIRD_PARTY_DIR}/abseil-cpp abseil-cpp)
 add_subdirectory(${THIRD_PARTY_DIR}/re2 re2)
+add_subdirectory(${THIRD_PARTY_DIR}/TinyTorch TinyTorch)
 
 file(GLOB_RECURSE TinyGPT_src "./*.cpp" "./*.h")
-
-if (MSVC)
-    set_source_files_properties(${TinyGPT_src} PROPERTIES COMPILE_FLAGS "/WX")
-else ()
-    set_source_files_properties(${TinyGPT_src} PROPERTIES COMPILE_FLAGS "-Werror -Wno-deprecated-declarations")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-endif ()
-
 add_library(${PROJECT_NAME}
         ${TinyGPT_src}
         ${THIRD_PARTY_DIR}/json11/json11.cpp
@@ -33,19 +28,17 @@ add_library(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${THIRD_PARTY_DIR}/json11
         ${THIRD_PARTY_DIR}/re2
+        ${THIRD_PARTY_DIR}/TinyTorch
 )
 
-if (MSVC)
-    set(MKL_ARCH intel64)
-    set(MKL_LINK static)
-    set(MKL_THREADING intel_thread)
-    find_package(MKL CONFIG REQUIRED)
-    target_link_libraries(${PROJECT_NAME}
-            re2::re2 MKL::MKL
-    )
-endif ()
+target_link_libraries(${PROJECT_NAME} re2::re2 TinyTorch)
 
-if (APPLE)
-    find_library(ACCELERATE_LIBRARY Accelerate)
-    target_link_libraries(${PROJECT_NAME} re2::re2 ${ACCELERATE_LIBRARY})
+if (CMAKE_BUILD_TYPE STREQUAL Debug)
+    add_definitions(-DDEBUG)
+elseif (CMAKE_BUILD_TYPE STREQUAL Release)
+    if (MSVC)
+        set_source_files_properties(${TinyGPT_src} PROPERTIES COMPILE_FLAGS "/Ox")
+    else ()
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+    endif ()
 endif ()
