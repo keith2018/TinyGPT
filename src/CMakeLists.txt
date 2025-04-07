@@ -9,13 +9,7 @@ endif ()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(ABSL_PROPAGATE_CXX_STD ON)
-set(ABSL_ENABLE_INSTALL ON)
-set(CMAKE_INSTALL_PREFIX "/usr/local/tiny")
 set(BUILD_TEST OFF)
-
-add_subdirectory(${THIRD_PARTY_DIR}/abseil-cpp abseil-cpp)
-add_subdirectory(${THIRD_PARTY_DIR}/re2 re2)
 add_subdirectory(${THIRD_PARTY_DIR}/TinyTorch TinyTorch)
 
 file(GLOB_RECURSE TinyGPT_src "./*.cpp" "./*.h")
@@ -27,11 +21,10 @@ add_library(${PROJECT_NAME}
 
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${THIRD_PARTY_DIR}/json11
-        ${THIRD_PARTY_DIR}/re2
         ${THIRD_PARTY_DIR}/TinyTorch
 )
 
-target_link_libraries(${PROJECT_NAME} re2::re2 TinyTorch)
+target_link_libraries(${PROJECT_NAME} TinyTorch)
 
 if (CMAKE_BUILD_TYPE STREQUAL Debug)
     add_definitions(-DDEBUG)

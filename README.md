@@ -50,9 +50,6 @@ INPUT:exit
   - `TinyTorch` [https://github.com/keith2018/TinyTorch](https://github.com/keith2018/TinyTorch)
 - Json parser
   - `json11` [https://github.com/dropbox/json11](https://github.com/dropbox/json11)
-- Tokenizer regular matching
-  - `re2` [https://github.com/google/re2](https://github.com/google/re2)
-  - `abseil-cpp` [https://github.com/abseil/abseil-cpp](https://github.com/abseil/abseil-cpp)
 
 ## License
 

@@ -10,14 +10,14 @@
 #include <sstream>
 #include <locale>
 #include <codecvt>
+#include <regex>
 
 #include "FileUtils.h"
-#include "re2/re2.h"
 
 namespace TinyGPT {
 
-RE2 gEncoderPat_("('s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| "
-    "?[^\\s\\p{L}\\p{N}]+|\\s+\\(?!\\S\\)|\\s+)");
+std::regex gEncoderPat_(
+    R"('s|'t|'re|'ve|'m|'ll|'d| ?[a-zA-Z]+| ?[0-9]+| ?[^\s\w]+|\s+(?!\S)|\s+)");
 
 std::wstring StringUtils::utf82wstring(const std::string& str) {
   static std::wstring_convert<std::codecvt_utf8<wchar_t> > conv;
@@ -141,9 +141,10 @@ std::wstring Encoder::bpe(const std::wstring& token) {
 
 std::vector<float> Encoder::encode(const std::string& text) {
   std::vector<float> ret;
-  re2::StringPiece input(text);
-  std::string token;
-  while (RE2::FindAndConsume(&input, gEncoderPat_, &token)) {
+  std::string input = text;
+  std::smatch match;
+  while (std::regex_search(input, match, gEncoderPat_)) {
+    std::string token = match.str();
     std::wstring wToken;
     for (uint8_t b : token) {
       wToken.push_back(byteEncoder_[b]);
@@ -152,6 +153,7 @@ std::vector<float> Encoder::encode(const std::string& text) {
     for (auto& bpeToken : bpeTokens) {
       ret.push_back(static_cast<float>(encoder_[bpeToken]));
     }
+    input = match.suffix().str();
   }
   return ret;
 }
