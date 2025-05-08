@@ -1,7 +1,13 @@
 # TinyGPT
-Tiny C++11 GPT-2 inference implementation from scratch, which is mainly based on the project [picoGPT](https://github.com/jaymody/picoGPT).
+TinyGPT is a minimal C++11 implementation of GPT-2 inference, built from scratch and mainly inspired by the [picoGPT](https://github.com/jaymody/picoGPT) project.
 
-Accompanying blog post: [Write a GPT from scratch (TinyGPT)](https://robot9.me/write-gpt-from-scratch/)
+For more details, check out the accompanying blog post: [Write a GPT from scratch (TinyGPT)](https://robot9.me/write-gpt-from-scratch/)
+
+## Features
+
+- Fast BPE tokenizer, inspired by [tiktoken](https://github.com/openai/tiktoken).
+- CPU and CUDA inference.
+- KV cache enabled.
 
 ## Build and Run
 
