@@ -247,7 +247,6 @@ std::vector<std::string_view> BPE::bpeV2(std::string_view text) {
   struct WordsRank {
     uint32_t pos;
     uint32_t rank;
-    WordsRank* prev;
     WordsRank* next;
   };
 
@@ -258,12 +257,10 @@ std::vector<std::string_view> BPE::bpeV2(std::string_view text) {
   for (uint32_t i = 0; i < ranks.size(); i++) {
     ranks[i].pos = words[i].data() - text.data();
     ranks[i].rank = std::numeric_limits<uint32_t>::max();
-    ranks[i].prev = i > 0 ? &ranks[i - 1] : nullptr;
     ranks[i].next = &ranks[i + 1];
   }
   ranks.back().pos = text.size();
   ranks.back().rank = std::numeric_limits<uint32_t>::max();
-  ranks.back().prev = &ranks[ranks.size() - 2];
   ranks.back().next = nullptr;
 
   auto getRank = [&text, this](WordsRank* ptr) -> uint32_t {
@@ -291,15 +288,19 @@ std::vector<std::string_view> BPE::bpeV2(std::string_view text) {
   while (true) {
     auto minRank = std::numeric_limits<uint32_t>::max();
     WordsRank* minRankPtr = nullptr;
-    WordsRank* ptr = &ranks[0];
+    WordsRank* minRankPrevPtr = nullptr;
+
+    WordsRank* prev = nullptr;
+    WordsRank* curr = &ranks[0];
     validRanksCnt = 0;
-    while (ptr) {
-      auto rank = ptr->rank;
-      if (rank < minRank) {
-        minRank = rank;
-        minRankPtr = ptr;
+    while (curr) {
+      if (curr->rank < minRank) {
+        minRank = curr->rank;
+        minRankPtr = curr;
+        minRankPrevPtr = prev;
       }
-      ptr = ptr->next;
+      prev = curr;
+      curr = curr->next;
       validRanksCnt++;
     }
 
@@ -309,14 +310,11 @@ std::vector<std::string_view> BPE::bpeV2(std::string_view text) {
 
     // merge with next
     minRankPtr->next = minRankPtr->next->next;
-    if (minRankPtr->next) {
-      minRankPtr->next->prev = minRankPtr;
-    }
     minRankPtr->rank = getRank(minRankPtr);
 
     // update prev rank
-    if (minRankPtr->prev != nullptr) {
-      minRankPtr->prev->rank = getRank(minRankPtr->prev);
+    if (minRankPrevPtr != nullptr) {
+      minRankPrevPtr->rank = getRank(minRankPrevPtr);
     }
   }
 
