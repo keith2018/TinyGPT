@@ -5,20 +5,19 @@
  */
 
 #include "Model.h"
-#include "FileUtils.h"
 
 #include <cmath>
 
+#include "FileUtils.h"
+
 #define MATH_PI 3.1415926535f
 
-namespace TinyGPT {
+namespace tinygpt {
 
 TinyTorch::Device Model::device_ = TinyTorch::Device::CUDA;
 
 Tensor Model::gelu(const Tensor& x) {
-  return 0.5f * x * (1.f + Tensor::tanh(
-                         std::sqrt(2.f / MATH_PI) * (
-                           x + 0.044715f * x * x * x)));
+  return 0.5f * x * (1.f + Tensor::tanh(std::sqrt(2.f / MATH_PI) * (x + 0.044715f * x * x * x)));
 }
 
 Tensor Model::softmax(const Tensor& x) {
@@ -26,8 +25,7 @@ Tensor Model::softmax(const Tensor& x) {
   return expX / Tensor::sum(expX, -1, true);
 }
 
-Tensor Model::layerNorm(const Tensor& x, const Tensor& g, const Tensor& b,
-                        float eps) {
+Tensor Model::layerNorm(const Tensor& x, const Tensor& g, const Tensor& b, float eps) {
   auto mean = Tensor::mean(x, -1, true);
   auto variance = Tensor::var(x, -1, false, true);
 
@@ -38,12 +36,9 @@ Tensor Model::layerNorm(const Tensor& x, const Tensor& g, const Tensor& b,
   return g * norm + b;
 }
 
-Tensor Model::linear(const Tensor& x, const Tensor& w, const Tensor& b) {
-  return Tensor::matmul(x, w) + b;
-}
+Tensor Model::linear(const Tensor& x, const Tensor& w, const Tensor& b) { return Tensor::matmul(x, w) + b; }
 
-Tensor Model::feadForward(const Tensor& x, const Conv1D& fc,
-                          const Conv1D& proj) {
+Tensor Model::feadForward(const Tensor& x, const Conv1D& fc, const Conv1D& proj) {
   // project up
   auto a = gelu(linear(x, fc.w, fc.b));
 
@@ -51,16 +46,14 @@ Tensor Model::feadForward(const Tensor& x, const Conv1D& fc,
   return linear(a, proj.w, proj.b);
 }
 
-Tensor Model::attention(const Tensor& q, const Tensor& k, const Tensor& v,
-                        const Tensor& mask) {
+Tensor Model::attention(const Tensor& q, const Tensor& k, const Tensor& v, const Tensor& mask) {
   auto x = Tensor::matmulTrans(q, k, false, true);
   x /= std::sqrt((float)q.shape().back());
   x += mask;
   return Tensor::matmul(softmax(x), v);
 }
 
-Tensor Model::multiHeadAttention(const Tensor& x, const Conv1D& attn,
-                                 const Conv1D& proj, uint32_t head,
+Tensor Model::multiHeadAttention(const Tensor& x, const Conv1D& attn, const Conv1D& proj, uint32_t head,
                                  KVCache& cache) {
   // qkv projection
   auto xx = linear(x, attn.w, attn.b);
@@ -79,11 +72,10 @@ Tensor Model::multiHeadAttention(const Tensor& x, const Conv1D& attn,
   cache = {qkv[1], qkv[2]};
 
   // split into heads
-  std::vector<std::vector<Tensor> > qkvHeads;
+  std::vector<std::vector<Tensor>> qkvHeads;
   qkvHeads.reserve(qkv.size());
   for (auto& elem : qkv) {
-    qkvHeads.emplace_back(
-        elem.split(elem.shape().back() / static_cast<int32_t>(head), -1));
+    qkvHeads.emplace_back(elem.split(elem.shape().back() / static_cast<int32_t>(head), -1));
   }
 
   // causal mask to hide future inputs from being attended to
@@ -99,8 +91,7 @@ Tensor Model::multiHeadAttention(const Tensor& x, const Conv1D& attn,
   std::vector<Tensor> outHeads;
   outHeads.reserve(qkvHeads.size());
   for (uint32_t i = 0; i < head; i++) {
-    outHeads.emplace_back(attention(qkvHeads[0][i], qkvHeads[1][i],
-                                    qkvHeads[2][i], causalMask));
+    outHeads.emplace_back(attention(qkvHeads[0][i], qkvHeads[1][i], qkvHeads[2][i], causalMask));
   }
 
   // merge heads
@@ -112,12 +103,10 @@ Tensor Model::multiHeadAttention(const Tensor& x, const Conv1D& attn,
   return xx;
 }
 
-Tensor Model::transformerBlock(const Tensor& x, const TransformerBlock& block,
-                               uint32_t head, KVCache& cache) {
+Tensor Model::transformerBlock(const Tensor& x, const TransformerBlock& block, uint32_t head, KVCache& cache) {
   // multi-head causal self attention
   auto norm = layerNorm(x, block.ln_1.g, block.ln_1.b);
-  auto xx = x + multiHeadAttention(norm, block.attn.c_attn, block.attn.c_proj,
-                                   head, cache);
+  auto xx = x + multiHeadAttention(norm, block.attn.c_attn, block.attn.c_proj, head, cache);
 
   // position-wise feed forward network
   norm = layerNorm(xx, block.ln_2.g, block.ln_2.b);
@@ -125,8 +114,7 @@ Tensor Model::transformerBlock(const Tensor& x, const TransformerBlock& block,
   return xx;
 }
 
-Tensor Model::gpt2(const std::vector<float>& inputs,
-                   const GPT2::Params& params, uint32_t head,
+Tensor Model::gpt2(const std::vector<float>& inputs, const GPT2::Params& params, uint32_t head,
                    std::vector<KVCache>& cache) {
   bool useCache = !cache.empty();
 
@@ -134,19 +122,17 @@ Tensor Model::gpt2(const std::vector<float>& inputs,
   Tensor x;
   if (useCache) {
     auto wteIdx = Tensor(std::vector<float>{inputs.back()}, device_);
-    auto wpeIdx = Tensor(
-        std::vector<float>{static_cast<float>(inputs.size() - 1)}, device_);
+    auto wpeIdx = Tensor(std::vector<float>{static_cast<float>(inputs.size() - 1)}, device_);
     x = params.wte.index({wteIdx}) + params.wpe.index({wpeIdx});
   } else {
     cache.resize(params.blocks.size());
     auto wteIdx = Tensor(inputs, device_);
-    auto wpeIdx = Tensor::arange(0, static_cast<float>(inputs.size()), 1.f,
-                                 device_);
+    auto wpeIdx = Tensor::arange(0, static_cast<float>(inputs.size()), 1.f, device_);
     x = params.wte.index({wteIdx}) + params.wpe.index({wpeIdx});
   }
 
   // forward pass through n_layer transformer blocks
-  for (int i = 0; i < params.blocks.size(); i++) {
+  for (size_t i = 0; i < params.blocks.size(); i++) {
     x = transformerBlock(x, params.blocks[i], head, cache[i]);
   }
 
@@ -155,9 +141,7 @@ Tensor Model::gpt2(const std::vector<float>& inputs,
   return Tensor::matmulTrans(x, params.wte, false, true);
 }
 
-void Model::generate(std::vector<float>& tokens, const GPT2::Params& params,
-                     uint32_t head,
-                     uint32_t maxTokens,
+void Model::generate(std::vector<float>& tokens, const GPT2::Params& params, uint32_t head, uint32_t maxTokens,
                      const std::function<bool(float token)>& callback) {
   std::vector<KVCache> cache;
   // auto-regressive decode loop
@@ -178,84 +162,95 @@ void Model::generate(std::vector<float>& tokens, const GPT2::Params& params,
   }
 }
 
-bool Model::loadModelGPT2(GPT2& gpt2, const char* hparams,
-                          const char* modelDict) {
+bool Model::loadModelGPT2(GPT2& gpt2, const char* hparams, const char* modelDict) {
   FUNCTION_TIMED();
   // load hparams.json
   const auto hparamsJson = FileUtils::parseJson(hparams);
-  if (hparamsJson.is_null()) {
+  if (hparamsJson.IsNull() || !hparamsJson.IsObject()) {
     LOGE("parse file failed: %s", hparams);
     return false;
   }
-  gpt2.hparams.n_vocab = hparamsJson["n_vocab"].int_value();
-  gpt2.hparams.n_ctx = hparamsJson["n_ctx"].int_value();
-  gpt2.hparams.n_embd = hparamsJson["n_embd"].int_value();
-  gpt2.hparams.n_head = hparamsJson["n_head"].int_value();
-  gpt2.hparams.n_layer = hparamsJson["n_layer"].int_value();
+  gpt2.hparams.n_vocab = hparamsJson["n_vocab"].GetInt();
+  gpt2.hparams.n_ctx = hparamsJson["n_ctx"].GetInt();
+  gpt2.hparams.n_embd = hparamsJson["n_embd"].GetInt();
+  gpt2.hparams.n_head = hparamsJson["n_head"].GetInt();
+  gpt2.hparams.n_layer = hparamsJson["n_layer"].GetInt();
 
   // load model_dict.json
   const auto modelDictJson = FileUtils::parseJson(modelDict);
-  if (modelDictJson.is_null()) {
+  if (modelDictJson.IsNull() || !modelDictJson.IsObject()) {
     LOGE("parse file failed: %s", modelDict);
     return false;
   }
 
   // load model_file.data
-  auto dataPath = modelDictJson["file_path"].string_value();
+  if (!modelDictJson.HasMember("file_path") || !modelDictJson["file_path"].IsString()) {
+    LOGE("model_dict missing file_path");
+    return false;
+  }
+  std::string dataPath = modelDictJson["file_path"].GetString();
   std::fstream dataFile(dataPath, std::ios::in | std::ios::binary);
   if (!dataFile.is_open()) {
     LOGE("open file failed: %s", dataPath.c_str());
-    return {};
+    return false;
   }
 
   // check file size
   dataFile.seekg(0, std::ios::end);
   auto fileSize = (uint32_t)dataFile.tellg();
-  auto expectSize = modelDictJson["file_size"].int_value();
+  if (!modelDictJson.HasMember("file_size") || !modelDictJson["file_size"].IsInt()) {
+    LOGE("model_dict missing file_size");
+    return false;
+  }
+  auto expectSize = modelDictJson["file_size"].GetUint();
   if (fileSize != expectSize) {
-    LOGE("model file size invalid! expect: %lld, actual: %lld", expectSize,
-         fileSize);
-    return {};
+    LOGE("model file size invalid! expect: %d, actual: %d", expectSize, fileSize);
+    return false;
   }
   dataFile.seekg(0, std::ios::beg);
 
-  auto& model = modelDictJson["model_index"];
+  if (!modelDictJson.HasMember("model_index") || !modelDictJson["model_index"].IsObject()) {
+    LOGE("model_dict missing model_index");
+    return false;
+  }
+  const auto& model = modelDictJson["model_index"];
 
   loadTensor(gpt2.params.wpe, dataFile, model["wpe"]);
   loadTensor(gpt2.params.wte, dataFile, model["wte"]);
   loadLayerNorm(gpt2.params.ln_f, dataFile, model["ln_f"]);
   gpt2.params.blocks.resize(gpt2.hparams.n_layer);
+  if (!model.HasMember("blocks") || !model["blocks"].IsArray()) {
+    LOGE("model_index missing blocks");
+    return false;
+  }
+  const auto& blocks = model["blocks"];
   for (uint32_t i = 0; i < gpt2.hparams.n_layer; i++) {
-    loadTransformerBlock(gpt2.params.blocks[i], dataFile, model["blocks"][i]);
+    loadTransformerBlock(gpt2.params.blocks[i], dataFile, blocks[i]);
   }
 
   return true;
 }
 
-void Model::loadTensor(Tensor& ret, std::fstream& fin,
-                       const json11::Json& json) {
+void Model::loadTensor(Tensor& ret, std::fstream& fin, const rapidjson::Value& json) {
   ret = Tensor::shape(getShape(json));
-  uint32_t pos = json["pos"].int_value();
+  uint32_t pos = json["pos"].GetUint();
   fin.seekg(pos, std::ios::beg);
   fin.read((char*)ret.data(), std::streamsize(sizeof(float) * ret.numel()));
 
   ret.to_(device_);
 }
 
-void Model::loadConv1D(Conv1D& ret, std::fstream& fin,
-                       const json11::Json& json) {
+void Model::loadConv1D(Conv1D& ret, std::fstream& fin, const rapidjson::Value& json) {
   loadTensor(ret.w, fin, json["w"]);
   loadTensor(ret.b, fin, json["b"]);
 }
 
-void Model::loadLayerNorm(LayerNorm& ret, std::fstream& fin,
-                          const json11::Json& json) {
+void Model::loadLayerNorm(LayerNorm& ret, std::fstream& fin, const rapidjson::Value& json) {
   loadTensor(ret.g, fin, json["g"]);
   loadTensor(ret.b, fin, json["b"]);
 }
 
-void Model::loadTransformerBlock(TransformerBlock& ret, std::fstream& fin,
-                                 const json11::Json& json) {
+void Model::loadTransformerBlock(TransformerBlock& ret, std::fstream& fin, const rapidjson::Value& json) {
   loadConv1D(ret.attn.c_attn, fin, json["attn"]["c_attn"]);
   loadConv1D(ret.attn.c_proj, fin, json["attn"]["c_proj"]);
   loadLayerNorm(ret.ln_1, fin, json["ln_1"]);
@@ -264,14 +259,14 @@ void Model::loadTransformerBlock(TransformerBlock& ret, std::fstream& fin,
   loadConv1D(ret.mlp.c_proj, fin, json["mlp"]["c_proj"]);
 }
 
-TinyTorch::Shape Model::getShape(const json11::Json& json) {
-  auto& items = json["shape"].array_items();
+TinyTorch::Shape Model::getShape(const rapidjson::Value& json) {
+  const auto& items = json["shape"].GetArray();
   TinyTorch::Shape ret;
-  ret.reserve(items.size());
+  ret.reserve(items.Size());
   for (auto& it : items) {
-    ret.push_back(it.int_value());
+    ret.push_back(it.GetInt());
   }
   return ret;
 }
 
-}
+}  // namespace tinygpt

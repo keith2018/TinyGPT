@@ -4,6 +4,8 @@ project(TinyGPT_test)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(THIRD_PARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party)
+
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 add_subdirectory(googletest)
 
@@ -13,10 +15,14 @@ add_executable(${PROJECT_NAME}
         test_model.cpp
         test_tokenizer.cpp
 )
+
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../src
-        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/json11
-        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/TinyTorch
+        ${THIRD_PARTY_DIR}/abseil-cpp
+        ${THIRD_PARTY_DIR}/re2
+        ${THIRD_PARTY_DIR}/TinyTorch
+        ${THIRD_PARTY_DIR}
+        googletest/googletest/include
         googletest/googlemock/include
 )
 target_link_libraries(${PROJECT_NAME} TinyGPT_lib gtest_main)
@@ -28,7 +34,7 @@ if (${USE_BLAS})
     if (MSVC)
         add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/TinyTorch/thirdparty/OpenBLAS/win64-64/bin/libopenblas.dll
+                ${THIRD_PARTY_DIR}/TinyTorch/thirdparty/OpenBLAS/win64-64/bin/libopenblas.dll
                 $<TARGET_FILE_DIR:${PROJECT_NAME}>/libopenblas.dll
         )
     endif ()

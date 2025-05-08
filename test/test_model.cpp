@@ -4,10 +4,10 @@
  *
  */
 
-#include "test.h"
 #include "Model.h"
+#include "test.h"
 
-using namespace TinyGPT;
+using namespace tinygpt;
 
 TEST(TEST_MODEL, basic_gelu) {
   Tensor x({{1, 2}, {-2, 0.5}});

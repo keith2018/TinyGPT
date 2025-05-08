@@ -3,12 +3,6 @@ Tiny C++11 GPT-2 inference implementation from scratch, which is mainly based on
 
 Accompanying blog post: [Write a GPT from scratch (TinyGPT)](https://robot9.me/write-gpt-from-scratch/)
 
-## Core class
-
-- [`Model`](src/Model.h): GPT-2 model implementation with reference to [gpt2_pico.py](https://github.com/jaymody/picoGPT/blob/main/gpt2_pico.py).
-- [`Tokenizer`](src/Tokenizer.h): BPE tokenizer with exactly the same logic as GPT-2 [encoder.py](https://github.com/openai/gpt-2/blob/master/src/encoder.py).
-
-
 ## Build and Run
 
 ### 1. Get the code
@@ -49,7 +43,12 @@ INPUT:exit
 - Tensor
   - `TinyTorch` [https://github.com/keith2018/TinyTorch](https://github.com/keith2018/TinyTorch)
 - Json parser
-  - `json11` [https://github.com/dropbox/json11](https://github.com/dropbox/json11)
+  - `RapidJSON` [https://github.com/Tencent/rapidjson](https://github.com/Tencent/rapidjson)
+- Regex (Tokenizer)
+  - `RE2` [https://github.com/google/re2](https://github.com/google/re2)
+  - `Abseil` [https://github.com/abseil/abseil-cpp](https://github.com/abseil/abseil-cpp)
+- HashMap
+  - `ankerl::unordered_dense` [https://github.com/martinus/unordered_dense](https://github.com/martinus/unordered_dense)
 
 ## License
 

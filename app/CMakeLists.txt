@@ -6,13 +6,18 @@ if (CMAKE_BUILD_TYPE STREQUAL Debug)
     add_definitions(-DDEBUG)
 endif ()
 
+set(THIRD_PARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party)
+
 add_executable(${PROJECT_NAME} main.cpp)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../src
-        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/json11
-        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/TinyTorch
+        ${THIRD_PARTY_DIR}/abseil-cpp
+        ${THIRD_PARTY_DIR}/re2
+        ${THIRD_PARTY_DIR}/TinyTorch
+        ${THIRD_PARTY_DIR}
 )
+
 target_link_libraries(${PROJECT_NAME} TinyGPT_lib)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin)
@@ -23,7 +28,7 @@ if (${USE_BLAS})
     if (MSVC)
         add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/TinyTorch/thirdparty/OpenBLAS/win64-64/bin/libopenblas.dll
+                ${THIRD_PARTY_DIR}/TinyTorch/thirdparty/OpenBLAS/win64-64/bin/libopenblas.dll
                 $<TARGET_FILE_DIR:${PROJECT_NAME}>/libopenblas.dll
         )
     endif ()

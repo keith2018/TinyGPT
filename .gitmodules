@@ -4,3 +4,9 @@
 [submodule "third_party/TinyTorch"]
 	path = third_party/TinyTorch
 	url = https://github.com/keith2018/TinyTorch.git
+[submodule "third_party/re2"]
+	path = third_party/re2
+	url = https://github.com/google/re2.git
+[submodule "third_party/abseil-cpp"]
+	path = third_party/abseil-cpp
+	url = https://github.com/abseil/abseil-cpp.git
