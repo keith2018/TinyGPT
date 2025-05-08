@@ -8,8 +8,8 @@
 
 #include <TinyTorch/Torch.h>
 
-namespace TinyGPT {
+namespace tinygpt {
 
 using Tensor = TinyTorch::TensorImpl;
 
-} // namespace TinyGPT
+}  // namespace tinygpt

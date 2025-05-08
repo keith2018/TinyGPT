@@ -6,17 +6,17 @@
 
 #pragma once
 
-#include "json11.hpp"
-
 #include <TinyTorch/Logger.h>
+#include <rapidjson/document.h>
+#include <rapidjson/error/en.h>
 
 #include <fstream>
 #include <sstream>
 
-namespace TinyGPT {
+namespace tinygpt {
 
 class FileUtils {
-public:
+ public:
   static std::string readText(std::istream& in) {
     in.seekg(0, std::ios::end);
     auto size = (size_t)in.tellg();
@@ -42,24 +42,19 @@ public:
     return readText(in);
   }
 
-  static json11::Json parseJson(const std::string& str) {
-    std::string err;
-    auto ret = json11::Json::parse(str.c_str(), err);
-    if (ret.is_null()) {
-      LOGE("parse file error: %s", err.c_str());
-      return {};
+  static rapidjson::Document parseJson(const std::string& str) {
+    rapidjson::Document doc;
+    rapidjson::ParseResult ok = doc.Parse(str.c_str());
+    if (!ok) {
+      LOGE("parse file error: %s (%zu)", rapidjson::GetParseError_En(ok.Code()), ok.Offset());
+      doc.SetNull();
     }
-
-    return ret;
+    return doc;
   }
 
-  static json11::Json parseJson(const char* path) {
-    return parseJson(readText(path));
-  }
+  static rapidjson::Document parseJson(const char* path) { return parseJson(readText(path)); }
 
-  static json11::Json parseJson(std::istream& in) {
-    return parseJson(readText(in));
-  }
+  static rapidjson::Document parseJson(std::istream& in) { return parseJson(readText(in)); }
 };
 
-}
+}  // namespace tinygpt
