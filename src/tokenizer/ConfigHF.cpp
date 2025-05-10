@@ -11,6 +11,7 @@
 #include "BPE.h"
 #include "ByteLevel.h"
 #include "Split.h"
+#include "TemplateProcessing.h"
 #include "rapidjson/document.h"
 
 namespace tinygpt::tokenizer::huggingface {
@@ -21,20 +22,21 @@ T getJsonValue(const rapidjson::Value& obj, const char* key, const T& defaultVal
 // bool
 template <>
 bool getJsonValue(const rapidjson::Value& obj, const char* key, const bool& defaultValue) {
-  return obj.HasMember(key) && obj[key].IsBool() ? obj[key].GetBool() : defaultValue;
+  return obj.IsObject() && obj.HasMember(key) && obj[key].IsBool() ? obj[key].GetBool() : defaultValue;
 }
 
 // int32_t
 template <>
 int32_t getJsonValue(const rapidjson::Value& obj, const char* key, const int32_t& defaultValue) {
-  return obj.HasMember(key) && obj[key].IsInt() ? obj[key].GetInt() : defaultValue;
+  return obj.IsObject() && obj.HasMember(key) && obj[key].IsInt() ? obj[key].GetInt() : defaultValue;
 }
 
 // std::string
 template <>
 std::string getJsonValue(const rapidjson::Value& obj, const char* key, const std::string& defaultValue) {
-  return obj.HasMember(key) && obj[key].IsString() ? std::string(obj[key].GetString(), obj[key].GetStringLength())
-                                                   : defaultValue;
+  return obj.IsObject() && obj.HasMember(key) && obj[key].IsString()
+             ? std::string(obj[key].GetString(), obj[key].GetStringLength())
+             : defaultValue;
 }
 
 static ComponentType parseComponentType(const std::string& s) {
@@ -42,7 +44,7 @@ static ComponentType parseComponentType(const std::string& s) {
   if (s == "Split") return ComponentType::SPLIT;
   if (s == "ByteLevel") return ComponentType::BYTE_LEVEL;
   if (s == "BPE") return ComponentType::BPE;
-  LOGE("Unknown type: %s", s.c_str());
+  if (s == "TemplateProcessing") return ComponentType::TEMPLATE_PROCESSING;
   return ComponentType::UNKNOWN;
 }
 
@@ -52,14 +54,13 @@ static SplitDelimiterBehavior parseSplitDelimiterBehavior(const std::string& s) 
   if (s == "MergedWithPrevious") return SplitDelimiterBehavior::MERGED_WITH_PREVIOUS;
   if (s == "MergedWithNext") return SplitDelimiterBehavior::MERGED_WITH_NEXT;
   if (s == "Contiguous") return SplitDelimiterBehavior::CONTIGUOUS;
-  LOGE("Unknown behavior: %s", s.c_str());
   return SplitDelimiterBehavior::UNKNOWN;
 }
 
 static ConfigAddedToken parseConfigAddedToken(const rapidjson::Value& j) {
   ConfigAddedToken t;
   t.id = getJsonValue(j, "id", -1);
-  t.content = getJsonValue(j, "content", std::string(""));
+  t.content = j.IsString() ? j.GetString() : getJsonValue(j, "content", std::string(""));
   t.singleWord = getJsonValue(j, "single_word", false);
   t.lStrip = getJsonValue(j, "lstrip", false);
   t.rStrip = getJsonValue(j, "rstrip", false);
@@ -134,6 +135,55 @@ static std::unique_ptr<Config> parseConfigBPE(const rapidjson::Value& j) {
   return c;
 }
 
+static TemplateElement parseTemplateElement(const rapidjson::Value& j) {
+  if (j.HasMember("SpecialToken")) {
+    const auto& st = j["SpecialToken"];
+    TemplateElement e;
+    e.type = TemplateElement::SpecialToken;
+    e.id = st["id"].GetString();
+    e.typeId = st["type_id"].GetInt();
+    return e;
+  }
+
+  if (j.HasMember("Sequence")) {
+    const auto& seq = j["Sequence"];
+    TemplateElement e;
+    e.type = TemplateElement::Sequence;
+    e.id = seq["id"].GetString();  // "A" or "B"
+    e.typeId = seq["type_id"].GetInt();
+    return e;
+  }
+
+  LOGE("Unknown template element");
+  return {};
+}
+
+static std::unique_ptr<Config> parseConfigTemplateProcessing(const rapidjson::Value& j) {
+  auto c = std::make_unique<ConfigTemplateProcessing>();
+  c->type = ComponentType::TEMPLATE_PROCESSING;
+  const auto& st = j["special_tokens"];
+  for (auto it = st.MemberBegin(); it != st.MemberEnd(); ++it) {
+    std::string name = it->name.GetString();
+    const auto& ids_arr = it->value["ids"];
+    std::vector<int32_t> ids;
+    for (auto& v : ids_arr.GetArray()) {
+      ids.push_back(v.GetInt());
+    }
+    c->specialTokens[name] = {ids};
+  }
+
+  // single
+  for (auto& elem : j["single"].GetArray()) {
+    c->single.push_back(parseTemplateElement(elem));
+  }
+  // pair
+  for (auto& elem : j["pair"].GetArray()) {
+    c->pair.push_back(parseTemplateElement(elem));
+  }
+
+  return c;
+}
+
 static std::unique_ptr<Config> parseConfig(const rapidjson::Value& j);
 
 static std::unique_ptr<Config> parseConfigSequence(const rapidjson::Value& j) {  // NOLINT(misc-no-recursion)
@@ -164,8 +214,10 @@ static std::unique_ptr<Config> parseConfig(const rapidjson::Value& j) {  // NOLI
       return parseConfigByteLevel(j);
     case ComponentType::BPE:
       return parseConfigBPE(j);
+    case ComponentType::TEMPLATE_PROCESSING:
+      return parseConfigTemplateProcessing(j);
     default:
-      LOGE("Unknown config type: %s", typeStr.c_str());
+      LOGE("Component type not support: %s", typeStr.c_str());
   }
   return nullptr;
 }
@@ -300,6 +352,15 @@ static std::unique_ptr<Component> createBPE(const std::unique_ptr<Config>& cfg) 
   return std::move(bpe);
 }
 
+static std::unique_ptr<Component> createTemplateProcessing(const std::unique_ptr<Config>& cfg) {
+  if (!cfg) {
+    return nullptr;
+  }
+  auto* config = dynamic_cast<ConfigTemplateProcessing*>(cfg.get());
+  auto tp = std::make_unique<TemplateProcessing>(config->single, config->pair, config->specialTokens);
+  return std::move(tp);
+}
+
 std::unique_ptr<Component> createComponent(const std::unique_ptr<Config>& cfg) {  // NOLINT(misc-no-recursion)
   if (!cfg) {
     return nullptr;
@@ -313,6 +374,8 @@ std::unique_ptr<Component> createComponent(const std::unique_ptr<Config>& cfg) {
       return createByteLevel(cfg);
     case ComponentType::BPE:
       return createBPE(cfg);
+    case ComponentType::TEMPLATE_PROCESSING:
+      return createTemplateProcessing(cfg);
     default:
       LOGE("Unknown config type: %d", cfg->type);
   }

@@ -79,9 +79,36 @@ TEST(TEST_tokenizer, pretokenize_bytelevel) {
   EXPECT_EQ(expected, getStrings(actual));
 }
 
-TEST(TEST_tokenizer, tokenizer_llama31) {
+TEST(TEST_tokenizer, tokenizer_llama_31_8b) {
   tokenizer::Tokenizer tokenizer;
-  bool initOk = tokenizer.initWithConfigHF("assets/llama31/tokenizer.json", "assets/llama31/tokenizer_config.json");
+  bool initOk =
+      tokenizer.initWithConfigHF("assets/Llama-3.1-8B/tokenizer.json", "assets/Llama-3.1-8B/tokenizer_config.json");
+  EXPECT_TRUE(initOk);
+
+  std::map<std::string, std::vector<int32_t>> tokenPair = {
+      {"hello world!", {128000, 15339, 1917, 0}},
+      {"hello world!   ", {128000, 15339, 1917, 0, 262}},
+      {"<｜User｜>Thanks for putting me into the right direction",
+       {128000, 27, 104926, 1502, 104926, 29, 12947, 369, 10917, 757, 1139, 279, 1314, 5216}},
+      {"hello，你好啊, thanks", {128000, 15339, 104660, 53901, 102856, 11, 9523}},
+      {" ありがとうございます。 Arigatoo gozaimasu",
+       {128000, 220, 97135, 61689, 1811, 1676, 343, 266, 2689, 733, 89, 2706, 96377}},
+      {"你好😀🐶", {128000, 57668, 53901, 76460, 222, 9468, 238, 114}},
+      {"   hello world!    ", {128000, 256, 24748, 1917, 0, 257}},
+  };
+
+  for (auto &[text, ids] : tokenPair) {
+    auto encodeRet = tokenizer.encode(text);
+    EXPECT_TRUE(encodeRet == ids);
+    auto decodeRet = tokenizer.decode(ids);
+    EXPECT_TRUE(decodeRet == tokenizer.bosTokenContent() + text);
+  }
+}
+
+TEST(TEST_tokenizer, tokenizer_ds_r1_8b) {
+  tokenizer::Tokenizer tokenizer;
+  bool initOk = tokenizer.initWithConfigHF("assets/DeepSeek-R1-Distill-Llama-8B/tokenizer.json",
+                                           "assets/DeepSeek-R1-Distill-Llama-8B/tokenizer_config.json");
   EXPECT_TRUE(initOk);
 
   std::map<std::string, std::vector<int32_t>> tokenPair = {
@@ -93,6 +120,7 @@ TEST(TEST_tokenizer, tokenizer_llama31) {
       {" ありがとうございます。 Arigatoo gozaimasu",
        {128000, 220, 97135, 61689, 1811, 1676, 343, 266, 2689, 733, 89, 2706, 96377}},
       {"你好😀🐶", {128000, 57668, 53901, 76460, 222, 9468, 238, 114}},
+      {"   hello world!    ", {128000, 256, 24748, 1917, 0, 257}},
   };
 
   for (auto &[text, ids] : tokenPair) {
@@ -127,7 +155,8 @@ TEST(TEST_tokenizer, tokenizer_gpt2) {
 
 TEST(TEST_tokenizer, tokenizer_batch) {
   tokenizer::Tokenizer tokenizer;
-  bool initOk = tokenizer.initWithConfigHF("assets/llama31/tokenizer.json", "assets/llama31/tokenizer_config.json");
+  bool initOk = tokenizer.initWithConfigHF("assets/DeepSeek-R1-Distill-Llama-8B/tokenizer.json",
+                                           "assets/DeepSeek-R1-Distill-Llama-8B/tokenizer_config.json");
   EXPECT_TRUE(initOk);
 
   auto text = "hello world!";

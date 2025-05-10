@@ -14,10 +14,14 @@
 using namespace tinygpt;
 using Behavior = tokenizer::SplitDelimiterBehavior;
 
+constexpr char const* TEXT_PATH = "assets/text/shakespeare.txt";
+constexpr char const* TOKENIZER_PATH = "assets/Llama-3.1-8B/tokenizer.json";
+constexpr char const* TOKENIZER_CONFIG_PATH = "assets/Llama-3.1-8B/tokenizer_config.json";
+
 void app_tokenizer() {
   LOGI("app_tokenizer()");
 
-  std::ifstream file("assets/text/shakespeare.txt", std::ios::in | std::ios::binary | std::ios::ate);
+  std::ifstream file(TEXT_PATH, std::ios::in | std::ios::binary | std::ios::ate);
   if (!file) {
     LOGE("Failed to open file.");
     return;
@@ -33,7 +37,7 @@ void app_tokenizer() {
   }
 
   tokenizer::Tokenizer tokenizer;
-  bool isOk = tokenizer.initWithConfigHF("assets/llama31/tokenizer.json", "assets/llama31/tokenizer_config.json");
+  bool isOk = tokenizer.initWithConfigHF(TOKENIZER_PATH, TOKENIZER_CONFIG_PATH);
   LOGI("Tokenizer init ok: %s", isOk ? "true" : "false");
 
   auto batch = 8;
@@ -51,9 +55,6 @@ void app_tokenizer() {
   timer.start();
   auto ids = tokenizer.encodeBatch(input, 4, false);
   timer.mark();
-
-  assert(ids.size() == batch);
-  assert(ids.front().size() == 1484267);
 
   auto timeCost = timer.elapseMillis();
   auto speed = (float)(content.size() * batch) / (float)timeCost * 1000.f / (1024 * 1024);

@@ -47,6 +47,12 @@ struct ConfigBPE : Config {
   ankerl::unordered_dense::map<StringPair, int32_t, StringPairHash> merges;
 };
 
+struct ConfigTemplateProcessing : Config {
+  std::vector<TemplateElement> single;
+  std::vector<TemplateElement> pair;
+  ankerl::unordered_dense::map<std::string, std::vector<int32_t>> specialTokens;
+};
+
 struct ConfigSequence : Config {
   std::vector<std::unique_ptr<Config>> configs;
 };

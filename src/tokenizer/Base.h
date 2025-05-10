@@ -10,10 +10,9 @@
 #include <string>
 #include <vector>
 
+#include "TinyTorch/Logger.h"
 #include "ankerl/unordered_dense.h"
 #include "re2/re2.h"
-
-#include <TinyTorch/Logger.h>
 
 namespace tinygpt::tokenizer {
 
@@ -25,6 +24,7 @@ enum class ComponentType {
   SPLIT,
   BYTE_LEVEL,
   BPE,
+  TEMPLATE_PROCESSING,
 };
 
 enum class SplitDelimiterBehavior {
@@ -34,6 +34,12 @@ enum class SplitDelimiterBehavior {
   MERGED_WITH_PREVIOUS,
   MERGED_WITH_NEXT,
   CONTIGUOUS
+};
+
+struct TemplateElement {
+  enum Type { SpecialToken, Sequence } type;
+  std::string id;
+  int typeId;
 };
 
 using Range = std::pair<uint32_t, uint32_t>;  // [start, stop]
