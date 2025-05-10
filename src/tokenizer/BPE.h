@@ -55,7 +55,7 @@ class BPE : public Component {
  public:
   BPE(const ankerl::unordered_dense::map<std::string, int32_t>& vocab,
       const ankerl::unordered_dense::map<StringPair, int32_t, StringPairHash>& merges, bool ignoreMerges = false,
-      bool enableCache = false);
+      bool enableCache = true);
 
   ComponentType getType() override { return ComponentType::BPE; }
 
