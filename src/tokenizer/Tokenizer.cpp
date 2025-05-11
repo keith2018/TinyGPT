@@ -6,7 +6,6 @@
 
 #include "Tokenizer.h"
 
-#include <cassert>
 #include <thread>
 
 namespace tinygpt::tokenizer {
@@ -75,6 +74,9 @@ bool Tokenizer::initWithConfigGPT2(const std::string& encoderPath, const std::st
 }
 
 int32_t Tokenizer::token2Id(const std::string& token) {
+  if (token.empty()) {
+    return -1;
+  }
   auto it = addedEncoder_.find(token);
   if (it != addedEncoder_.end()) {
     return it->second;
@@ -97,7 +99,7 @@ std::vector<int32_t> Tokenizer::encode(const std::string& text, bool allowAddedT
   }
 
   if (!allowAddedTokens) {
-    auto ids = encodeOrdinary(text);
+    auto ids = encodeWithModel(text, false);
     ret.insert(ret.end(), ids.begin(), ids.end());
   } else {
     auto pieces = splitAddedTokens(text);
@@ -110,7 +112,7 @@ std::vector<int32_t> Tokenizer::encode(const std::string& text, bool allowAddedT
       }
 
       // other tokens
-      auto ids = encodeOrdinary(piece);
+      auto ids = encodeWithModel(piece, true);
       ret.insert(ret.end(), ids.begin(), ids.end());
     }
   }
@@ -152,44 +154,29 @@ void Tokenizer::addTokens(const ankerl::unordered_dense::map<std::string, int32_
   for (auto& [k, v] : tokens) {
     addedDecoder_[v] = k;
     if (idx > 0) addedPattern_ += "|";
-    addedPattern_ += re2::RE2::QuoteMeta(k);
+    addedPattern_ += Regex::quoteMeta(k);
     idx++;
   }
   if (!addedPattern_.empty()) {
-    addedMatchers_.reserve(NUM_MAX_THREAD);
-    for (uint32_t i = 0; i < NUM_MAX_THREAD; i++) {
-      addedMatchers_.emplace_back(std::make_unique<re2::RE2>("(" + addedPattern_ + ")"));
-    }
-    assert(addedMatchers_[0]->ok());
+    addedMatcher_ = std::make_unique<Regex>("(" + addedPattern_ + ")");
+    assert(addedMatcher_->valid());
   }
 }
 
 std::vector<std::string> Tokenizer::splitAddedTokens(const std::string& text) const {
-  if (addedMatchers_.empty()) {
+  if (!addedMatcher_) {
     return {text};
   }
-  const auto tId = std::hash<std::thread::id>{}(std::this_thread::get_id());
-  auto& matcher = *addedMatchers_[tId % NUM_MAX_THREAD];
-
-  std::vector<std::string> result;
-  re2::StringPiece input(text);
-  size_t lastPos = 0;
-  re2::StringPiece match;
-  while (RE2::FindAndConsume(&input, matcher, &match)) {
-    size_t matchPos = match.data() - text.data();
-    if (lastPos < matchPos) {
-      result.emplace_back(text.substr(lastPos, matchPos - lastPos));
-    }
-    result.emplace_back(match.data(), match.size());
-    lastPos = matchPos + match.size();
+  const auto ranges = Split::split(text, *addedMatcher_, SplitDelimiterBehavior::ISOLATED);
+  std::vector<std::string> results;
+  results.reserve(ranges.size());
+  for (const auto& r : ranges) {
+    results.emplace_back(text.substr(r.first, r.second - r.first));
   }
-  if (lastPos < text.size()) {
-    result.emplace_back(text.substr(lastPos));
-  }
-  return result;
+  return results;
 }
 
-std::vector<int32_t> Tokenizer::encodeOrdinary(const std::string& text) const {
+std::vector<int32_t> Tokenizer::encodeWithModel(const std::string& text, bool addSpecialTokens) const {
   std::string normedText;
   if (normalizer_) {
     normedText = normalizer_->normalize(text);
@@ -205,7 +192,7 @@ std::vector<int32_t> Tokenizer::encodeOrdinary(const std::string& text) const {
   }
   std::vector<int32_t> ids = model_->tokenize(preTokenizedStr);
   if (postProcessor_) {
-    ids = postProcessor_->postProcess(ids);
+    ids = postProcessor_->postProcess(ids, addSpecialTokens);
   }
   return ids;
 }
@@ -216,7 +203,9 @@ void Tokenizer::workerThread() {
     {
       std::unique_lock<std::mutex> lock(mutex_);
       cv_.wait(lock, [this] { return stop_ || !tasks_.empty(); });
-      if (stop_ && tasks_.empty()) return;
+      if (stop_ && tasks_.empty()) {
+        return;
+      }
       task = std::move(tasks_.front());
       tasks_.pop();
     }
@@ -248,29 +237,27 @@ void Tokenizer::parallelFor(const std::vector<Input>& inputs, std::vector<Output
   }
 
   std::atomic<size_t> finished{0};
-  size_t batch = n / numThreads, rem = n % numThreads;
-  size_t start = 0;
+  std::mutex finishedMutex;
+  std::condition_variable finishedCv;
 
-  for (uint32_t t = 0; t < numThreads; t++) {
-    size_t end = start + batch + (t < rem ? 1 : 0);
-    auto task = [&, start, end]() {
-      for (size_t i = start; i < end; i++) {
-        outputs[i] = func(inputs[i]);
+  for (size_t i = 0; i < inputs.size(); i++) {
+    auto task = [&, i]() {
+      outputs[i] = func(inputs[i]);
+      if (++finished == inputs.size()) {
+        std::lock_guard<std::mutex> lock(finishedMutex);
+        finishedCv.notify_one();
       }
-      ++finished;
     };
     {
       std::lock_guard<std::mutex> lock(mutex_);
       tasks_.emplace(task);
     }
     cv_.notify_one();
-    start = end;
   }
 
   // wait until all tasks done
-  while (finished.load() < numThreads) {
-    std::this_thread::yield();
-  }
+  std::unique_lock<std::mutex> lock(finishedMutex);
+  finishedCv.wait(lock, [&] { return finished == inputs.size(); });
 }
 
 }  // namespace tinygpt::tokenizer

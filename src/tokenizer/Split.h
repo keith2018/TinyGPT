@@ -10,8 +10,18 @@
 #include <vector>
 
 #include "Base.h"
+#include "Regex.h"
 
 namespace tinygpt::tokenizer {
+
+enum class SplitDelimiterBehavior {
+  UNKNOWN = 0,
+  REMOVED,
+  ISOLATED,
+  MERGED_WITH_PREVIOUS,
+  MERGED_WITH_NEXT,
+  CONTIGUOUS
+};
 
 class Split : public Component {
  public:
@@ -21,12 +31,11 @@ class Split : public Component {
 
   PreTokenizedString preTokenize(std::string_view text) override;
 
-  static std::string adjustRegexPattern(const std::string &inputRegex);
-  static std::vector<Range> split(std::string_view str, const re2::RE2 &matcher,
+  static std::vector<Range> split(std::string_view str, const Regex &matcher,
                                   SplitDelimiterBehavior behavior = SplitDelimiterBehavior::ISOLATED);
 
  private:
-  static std::vector<Range> match(std::string_view str, const re2::RE2 &matcher);
+  static std::vector<Range> match(std::string_view str, const Regex &matcher);
 
   static void splitRemoved(std::vector<Range> &results, std::vector<Range> &matches, size_t originSize);
   static void splitIsolated(std::vector<Range> &results, std::vector<Range> &matches, size_t originSize);
@@ -38,7 +47,7 @@ class Split : public Component {
   SplitDelimiterBehavior behavior_;
   bool invert_;
 
-  std::vector<std::unique_ptr<re2::RE2>> matchers_;
+  std::unique_ptr<Regex> matcher_;
   bool patternValid_;
 };
 

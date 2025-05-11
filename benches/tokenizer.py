@@ -11,6 +11,8 @@ from huggingface_hub import hf_hub_download
 from typing import Tuple, List
 from multiprocessing import Process
 
+import tinygpt
+
 MODEL_ID = "meta-llama/Meta-Llama-3.1-8B"
 DATASET = "facebook/xnli"
 DATASET_CONFIG = "all_languages"
@@ -67,14 +69,22 @@ def benchmark_batch(model: str, documents: list[str], num_threads: int, document
     hf_enc = Tokenizer.from_pretrained(model)
     out2 = hf_enc.encode("This is a test", add_special_tokens=False).ids
 
+    # tinygpt::tokenizer
+    tinygpt_enc = tinygpt.Tokenizer()
+    tokenizer_path = hf_hub_download(MODEL_ID, "tokenizer.json")
+    tokenizer_config_path = hf_hub_download(MODEL_ID, "tokenizer_config.json")
+    tinygpt_enc.initWithConfigHF(tokenizer_path, tokenizer_config_path)
+    out3 = tinygpt_enc.encode("This is a test", allowAddedTokens=False)
+
     assert out == out2, "sanity check"
+    assert out == out3, "sanity check"
 
     start = time.perf_counter_ns()
     enc.encode_ordinary_batch(documents, num_threads=num_threads)
     end = time.perf_counter_ns()
 
     readable_size, unit = format_byte_size(num_bytes / (end - start) * 1e9)
-    print(f"tiktoken \t{readable_size}  / s")
+    print(f"tiktoken \t{readable_size} / s")
 
 
     start = time.perf_counter_ns()
@@ -82,6 +92,13 @@ def benchmark_batch(model: str, documents: list[str], num_threads: int, document
     end = time.perf_counter_ns()
     readable_size, unit = format_byte_size(num_bytes / (end - start) * 1e9)
     print(f"huggingface \t{readable_size} / s")
+
+
+    start = time.perf_counter_ns()
+    tinygpt_enc.encodeBatch(documents, numThreads=num_threads, allowAddedTokens=False)
+    end = time.perf_counter_ns()
+    readable_size, unit = format_byte_size(num_bytes / (end - start) * 1e9)
+    print(f"tinygpt \t{readable_size} / s")
 
 
 def test(model: str, dataset: str, dataset_config: str, threads: List[int]):

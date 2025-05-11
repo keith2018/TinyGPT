@@ -101,7 +101,7 @@ TEST(TEST_tokenizer, tokenizer_llama_31_8b) {
     auto encodeRet = tokenizer.encode(text);
     EXPECT_TRUE(encodeRet == ids);
     auto decodeRet = tokenizer.decode(ids);
-    EXPECT_TRUE(decodeRet == tokenizer.bosTokenContent() + text);
+    EXPECT_TRUE(decodeRet == tokenizer.bosTokenStr() + text);
   }
 }
 
@@ -127,7 +127,7 @@ TEST(TEST_tokenizer, tokenizer_ds_r1_8b) {
     auto encodeRet = tokenizer.encode(text);
     EXPECT_TRUE(encodeRet == ids);
     auto decodeRet = tokenizer.decode(ids);
-    EXPECT_TRUE(decodeRet == tokenizer.bosTokenContent() + text);
+    EXPECT_TRUE(decodeRet == tokenizer.bosTokenStr() + text);
   }
 }
 

@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include <TinyTorch/Torch.h>
+#include "TinyTorch/Torch.h"
 
 namespace tinygpt {
 

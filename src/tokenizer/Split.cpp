@@ -6,19 +6,12 @@
 
 #include "Split.h"
 
-#include <regex>
-#include <thread>
-
 namespace tinygpt::tokenizer {
 
 Split::Split(std::string_view pattern, SplitDelimiterBehavior behavior, bool invert)
     : pattern_(pattern), behavior_(behavior), invert_(invert) {
-  auto regexPat = adjustRegexPattern(pattern_);
-  matchers_.reserve(NUM_MAX_THREAD);
-  for (uint32_t i = 0; i < NUM_MAX_THREAD; i++) {
-    matchers_.emplace_back(std::make_unique<re2::RE2>(regexPat));
-  }
-  patternValid_ = matchers_[0]->ok();
+  matcher_ = std::make_unique<Regex>(pattern);
+  patternValid_ = matcher_->valid();
 
   if (invert) {
     LOGE("error: invert mode not support");
@@ -30,23 +23,14 @@ PreTokenizedString Split::preTokenize(std::string_view text) {
   if (!patternValid_) {
     return {};
   }
-  const auto tId = std::hash<std::thread::id>{}(std::this_thread::get_id());
-  auto &matcher = *matchers_[tId % NUM_MAX_THREAD];
 
   PreTokenizedString ret;
   ret.backStr = text;
-  ret.pieces = split(text, matcher, behavior_);
+  ret.pieces = split(text, *matcher_, behavior_);
   return ret;
 }
 
-std::string Split::adjustRegexPattern(const std::string &inputRegex) {
-  // match \s+(?!\S)
-  static std::regex lookaheadPattern(R"(\\s\+\(\?!\\S\))");
-  // replace with \s+$
-  return std::regex_replace(inputRegex, lookaheadPattern, R"(\s+$)");
-}
-
-std::vector<Range> Split::split(std::string_view str, const re2::RE2 &matcher, SplitDelimiterBehavior behavior) {
+std::vector<Range> Split::split(std::string_view str, const Regex &matcher, SplitDelimiterBehavior behavior) {
   std::vector<Range> matches = match(str, matcher);
   std::vector<Range> splits;
   splits.reserve(matches.size());
@@ -74,21 +58,10 @@ std::vector<Range> Split::split(std::string_view str, const re2::RE2 &matcher, S
   return splits;
 }
 
-std::vector<Range> Split::match(std::string_view str, const re2::RE2 &matcher) {
+std::vector<Range> Split::match(std::string_view str, const Regex &matcher) {
   std::vector<Range> matches;
-  matches.reserve(str.size());
-
-  re2::StringPiece input(str.data(), str.size());
-  re2::StringPiece match;
-
-  size_t matchStart = 0;
-  size_t matchEnd = 0;
-
-  while (matcher.Match(input, matchEnd, str.size(), re2::RE2::UNANCHORED, &match, 1)) {
-    matchStart = match.data() - str.data();
-    matchEnd = matchStart + match.size();
-    matches.emplace_back(matchStart, matchEnd);
-  }
+  matches.reserve(str.size() / 2);
+  matcher.matchAll(matches, str);
   return matches;
 }
 

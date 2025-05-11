@@ -6,13 +6,13 @@
 
 #pragma once
 
+#include <cassert>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "TinyTorch/Logger.h"
 #include "ankerl/unordered_dense.h"
-#include "re2/re2.h"
 
 namespace tinygpt::tokenizer {
 
@@ -27,22 +27,7 @@ enum class ComponentType {
   TEMPLATE_PROCESSING,
 };
 
-enum class SplitDelimiterBehavior {
-  UNKNOWN = 0,
-  REMOVED,
-  ISOLATED,
-  MERGED_WITH_PREVIOUS,
-  MERGED_WITH_NEXT,
-  CONTIGUOUS
-};
-
-struct TemplateElement {
-  enum Type { SpecialToken, Sequence } type;
-  std::string id;
-  int typeId;
-};
-
-using Range = std::pair<uint32_t, uint32_t>;  // [start, stop]
+using Range = std::pair<uint32_t, uint32_t>;  // [begin, end]
 using StringPair = std::pair<std::string, std::string>;
 using StringViewPair = std::pair<std::string_view, std::string_view>;
 
@@ -91,7 +76,7 @@ class Component {
   virtual std::vector<int32_t> tokenize(const PreTokenizedString &tokens) { return {}; }
 
   // PostProcessor
-  virtual std::vector<int32_t> postProcess(const std::vector<int32_t> &ids) { return {}; }
+  virtual std::vector<int32_t> postProcess(const std::vector<int32_t> &ids, bool addSpecialTokens) { return {}; }
 
   // Decoder
   virtual std::string decode(const std::vector<std::string> &pieces) { return {}; }
@@ -107,7 +92,7 @@ class ComponentSequence : public Component {
   PreTokenizedString preTokenize(std::string_view text) override;
 
   // PostProcessor
-  std::vector<int32_t> postProcess(const std::vector<int32_t> &ids) override;
+  std::vector<int32_t> postProcess(const std::vector<int32_t> &ids, bool addSpecialTokens) override;
 
  protected:
   std::vector<std::unique_ptr<Component>> components;

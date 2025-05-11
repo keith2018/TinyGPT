@@ -55,10 +55,10 @@ PreTokenizedString ComponentSequence::preTokenize(std::string_view text) {
   return ret;
 }
 
-std::vector<int32_t> ComponentSequence::postProcess(const std::vector<int32_t>& ids) {
+std::vector<int32_t> ComponentSequence::postProcess(const std::vector<int32_t>& ids, bool addSpecialTokens) {
   std::vector<int32_t> currIds = ids;
   for (auto& comp : components) {
-    currIds = comp->postProcess(currIds);
+    currIds = comp->postProcess(currIds, addSpecialTokens);
   }
   return currIds;
 }

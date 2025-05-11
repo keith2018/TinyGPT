@@ -1,6 +1,9 @@
 .DS_Store
 .idea/
 .vs/
+.venv
+.vscode
+__pycache__/
 /app/bin
 /bin
 out

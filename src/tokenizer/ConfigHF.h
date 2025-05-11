@@ -11,6 +11,8 @@
 #include <vector>
 
 #include "Base.h"
+#include "Split.h"
+#include "TemplateProcessing.h"
 
 namespace tinygpt::tokenizer::huggingface {
 

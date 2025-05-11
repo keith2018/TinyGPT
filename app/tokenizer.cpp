@@ -7,7 +7,6 @@
 #include "tokenizer/Tokenizer.h"
 
 #include <fstream>
-#include <iostream>
 
 #include "TinyTorch/Timer.h"
 
@@ -41,8 +40,10 @@ void app_tokenizer() {
   LOGI("Tokenizer init ok: %s", isOk ? "true" : "false");
 
   auto batch = 8;
+  auto numThread = 4;
 #ifdef DEBUG
   batch = 1;
+  numThread = 1;
 #endif
 
   std::vector<std::string> input;
@@ -53,7 +54,7 @@ void app_tokenizer() {
 
   TinyTorch::Timer timer;
   timer.start();
-  auto ids = tokenizer.encodeBatch(input, 4, false);
+  auto ids = tokenizer.encodeBatch(input, numThread, false);
   timer.mark();
 
   auto timeCost = timer.elapseMillis();

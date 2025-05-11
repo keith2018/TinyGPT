@@ -1,12 +1,31 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.15)
 project(TinyGPT)
 
-add_subdirectory(src)
-add_subdirectory(app)
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
+option(TINYGPT_BUILD_PYBINDING "Whether or not to build pybinding" ON)
+option(TINYGPT_BUILD_DEMO "Whether or not to build demo" ON)
 option(TINYGPT_BUILD_TEST "Whether or not to build the tests" ON)
+
+if (${TINYGPT_BUILD_PYBINDING})
+    set(USE_BLAS OFF)  # TODO pybinding
+endif ()
+add_subdirectory(src)
+
+if (${TINYGPT_BUILD_PYBINDING})
+    set(TINYGPT_BUILD_TEST OFF)
+    set(TINYGPT_BUILD_DEMO OFF)
+endif ()
+
+if (${TINYGPT_BUILD_DEMO})
+    add_subdirectory(app)
+endif ()
+
 if (${TINYGPT_BUILD_TEST})
-    message(STATUS "Building tests")
     enable_testing()
     add_subdirectory(test)
 endif ()
+
+message(STATUS "TINYGPT_BUILD_PYBINDING ${TINYGPT_BUILD_PYBINDING}")
+message(STATUS "TINYGPT_BUILD_DEMO ${TINYGPT_BUILD_DEMO}")
+message(STATUS "TINYGPT_BUILD_TEST ${TINYGPT_BUILD_TEST}")

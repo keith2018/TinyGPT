@@ -6,12 +6,11 @@
 
 #pragma once
 
-#include <rapidjson/document.h>
-#include <rapidjson/istreamwrapper.h>
-
 #include <functional>
 
 #include "Tensor.h"
+#include "rapidjson/document.h"
+#include "rapidjson/istreamwrapper.h"
 
 namespace tinygpt {
 

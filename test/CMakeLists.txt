@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.15)
 project(TinyGPT_test)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -18,8 +18,6 @@ add_executable(${PROJECT_NAME}
 
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../src
-        ${THIRD_PARTY_DIR}/abseil-cpp
-        ${THIRD_PARTY_DIR}/re2
         ${THIRD_PARTY_DIR}/TinyTorch
         ${THIRD_PARTY_DIR}
         googletest/googletest/include

@@ -6,8 +6,6 @@
 
 #include "ByteLevel.h"
 
-#include <thread>
-
 #include "Split.h"
 
 namespace tinygpt::tokenizer {
@@ -105,12 +103,8 @@ ByteLevel::ByteLevel(bool addPrefixSpace, bool useRegex) : addPrefixSpace_(addPr
     // Ref https://github.com/openai/gpt-2/blob/master/src/encoder.py
     static const std::string PATTERN_GPT2 =
         R"('s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+)";
-    auto regexPat = Split::adjustRegexPattern(PATTERN_GPT2);
-    matchers_.reserve(NUM_MAX_THREAD);
-    for (uint32_t i = 0; i < NUM_MAX_THREAD; i++) {
-      matchers_.emplace_back(std::make_unique<re2::RE2>(regexPat));
-    }
-    assert(matchers_[0]->ok());
+    matcher_ = std::make_unique<Regex>(PATTERN_GPT2);
+    assert(matcher_->valid());
   }
 }
 
@@ -127,9 +121,7 @@ PreTokenizedString ByteLevel::preTokenize(std::string_view text) {
 
   std::vector<Range> ranges;
   if (useRegex_) {
-    const auto tId = std::hash<std::thread::id>{}(std::this_thread::get_id());
-    auto& matcher = *matchers_[tId % NUM_MAX_THREAD];
-    ranges = Split::split(inputView, matcher, SplitDelimiterBehavior::ISOLATED);
+    ranges = Split::split(inputView, *matcher_, SplitDelimiterBehavior::ISOLATED);
   } else {
     ranges = {{0, inputView.size()}};
   }
@@ -154,7 +146,10 @@ PreTokenizedString ByteLevel::preTokenize(std::string_view text) {
   return ret;
 }
 
-std::vector<int32_t> ByteLevel::postProcess(const std::vector<int32_t>& ids) { return ids; }
+std::vector<int32_t> ByteLevel::postProcess(const std::vector<int32_t>& ids, bool addSpecialTokens) {
+  // 'trimOffsets' not support
+  return ids;
+}
 
 std::string ByteLevel::decode(const std::vector<std::string>& pieces) {
   std::string ret;

@@ -19,6 +19,7 @@
 #include "ByteLevel.h"
 #include "ConfigGPT2.h"
 #include "ConfigHF.h"
+#include "Regex.h"
 #include "Split.h"
 
 namespace tinygpt::tokenizer {
@@ -45,19 +46,18 @@ class Tokenizer {
   int32_t eosTokenId() const { return eosTokenId_; }
   int32_t padTokenId() const { return padTokenId_; }
 
-  std::string bosTokenContent() { return bosTokenId_ < 0 ? std::string() : id2Token(bosTokenId_); }
-  std::string eosTokenContent() { return eosTokenId_ < 0 ? std::string() : id2Token(eosTokenId_); }
-  std::string padTokenContent() { return padTokenId_ < 0 ? std::string() : id2Token(padTokenId_); }
+  std::string bosTokenStr() { return bosTokenId_ < 0 ? std::string() : id2Token(bosTokenId_); }
+  std::string eosTokenStr() { return eosTokenId_ < 0 ? std::string() : id2Token(eosTokenId_); }
+  std::string padTokenStr() { return padTokenId_ < 0 ? std::string() : id2Token(padTokenId_); }
 
  private:
   void addTokens(const ankerl::unordered_dense::map<std::string, int32_t>& tokens);
   std::vector<std::string> splitAddedTokens(const std::string& text) const;
-  std::vector<int32_t> encodeOrdinary(const std::string& text) const;
+  std::vector<int32_t> encodeWithModel(const std::string& text, bool addSpecialTokens) const;
 
   void workerThread();
   template <typename Input, typename Output, typename Func>
-  void parallelFor(const std::vector<Input>& inputs, std::vector<Output>& outputs, Func func,
-                          uint32_t numThreads);
+  void parallelFor(const std::vector<Input>& inputs, std::vector<Output>& outputs, Func func, uint32_t numThreads);
 
   std::unique_ptr<Component> normalizer_;
   std::unique_ptr<Component> preTokenizer_;
@@ -74,7 +74,7 @@ class Tokenizer {
 
   // added tokens
   std::string addedPattern_;
-  std::vector<std::unique_ptr<re2::RE2>> addedMatchers_;
+  std::unique_ptr<Regex> addedMatcher_;
   ankerl::unordered_dense::map<std::string, int32_t> addedEncoder_;
   ankerl::unordered_dense::map<int32_t, std::string> addedDecoder_;
 
