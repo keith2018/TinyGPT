@@ -9,6 +9,10 @@ For more details, check out the accompanying blog post: [Write a GPT from scratc
 - CPU and CUDA inference.
 - KV cache enabled.
 
+`tinygpt::tokenizer` is faster than both [HuggingFace Tokenizers](https://github.com/huggingface/tokenizers) and [OpenAI tiktoken](https://github.com/openai/tiktoken)，the encoding speed was measured using the [~/benches/tokenizer.py](https://github.com/keith2018/TinyGPT/blob/main/benches/tokenizer.py) script on a machine with an Intel(R) Xeon(R) Platinum 8255C CPU @ 2.50GHz.
+
+![](docs/bench.png)
+
 ## Build and Run
 
 ### 1. Get the code
@@ -51,8 +55,7 @@ INPUT:exit
 - Json parser
   - `RapidJSON` [https://github.com/Tencent/rapidjson](https://github.com/Tencent/rapidjson)
 - Regex (Tokenizer)
-  - `RE2` [https://github.com/google/re2](https://github.com/google/re2)
-  - `Abseil` [https://github.com/abseil/abseil-cpp](https://github.com/abseil/abseil-cpp)
+  - `pcre2` [https://github.com/PCRE2Project/pcre2](https://github.com/PCRE2Project/pcre2)
 - HashMap
   - `ankerl::unordered_dense` [https://github.com/martinus/unordered_dense](https://github.com/martinus/unordered_dense)
 
