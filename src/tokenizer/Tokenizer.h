@@ -21,6 +21,7 @@
 #include "ConfigHF.h"
 #include "Regex.h"
 #include "Split.h"
+#include "moodycamel/concurrentqueue.h"
 
 namespace tinygpt::tokenizer {
 
@@ -80,7 +81,7 @@ class Tokenizer {
 
   // threads management
   std::vector<std::thread> threads_;
-  std::queue<std::function<void()>> tasks_;
+  moodycamel::ConcurrentQueue<std::function<void()>> tasks_;
   std::mutex mutex_;
   std::condition_variable cv_;
   std::atomic<bool> stop_{false};

@@ -200,16 +200,12 @@ std::vector<int32_t> Tokenizer::encodeWithModel(const std::string& text, bool ad
 void Tokenizer::workerThread() {
   while (!stop_) {
     std::function<void()> task;
-    {
+    if (tasks_.try_dequeue(task)) {
+      task();
+    } else {
       std::unique_lock<std::mutex> lock(mutex_);
-      cv_.wait(lock, [this] { return stop_ || !tasks_.empty(); });
-      if (stop_ && tasks_.empty()) {
-        return;
-      }
-      task = std::move(tasks_.front());
-      tasks_.pop();
+      cv_.wait(lock, [this] { return stop_ || tasks_.size_approx() > 0; });
     }
-    task();
   }
 }
 
@@ -240,6 +236,8 @@ void Tokenizer::parallelFor(const std::vector<Input>& inputs, std::vector<Output
   std::mutex finishedMutex;
   std::condition_variable finishedCv;
 
+  std::vector<std::function<void()>> fs;
+  fs.reserve(inputs.size());
   for (size_t i = 0; i < inputs.size(); i++) {
     auto task = [&, i]() {
       outputs[i] = func(inputs[i]);
@@ -248,12 +246,10 @@ void Tokenizer::parallelFor(const std::vector<Input>& inputs, std::vector<Output
         finishedCv.notify_one();
       }
     };
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      tasks_.emplace(task);
-    }
-    cv_.notify_one();
+    fs.emplace_back(task);
   }
+  tasks_.enqueue_bulk(fs.begin(), fs.size());
+  cv_.notify_all();
 
   // wait until all tasks done
   std::unique_lock<std::mutex> lock(finishedMutex);

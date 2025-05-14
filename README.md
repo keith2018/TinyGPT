@@ -52,12 +52,14 @@ INPUT:exit
 
 - Tensor
   - `TinyTorch` [https://github.com/keith2018/TinyTorch](https://github.com/keith2018/TinyTorch)
-- Json parser
+- JsonParser
   - `RapidJSON` [https://github.com/Tencent/rapidjson](https://github.com/Tencent/rapidjson)
-- Regex (Tokenizer)
+- Regex
   - `pcre2` [https://github.com/PCRE2Project/pcre2](https://github.com/PCRE2Project/pcre2)
 - HashMap
   - `ankerl::unordered_dense` [https://github.com/martinus/unordered_dense](https://github.com/martinus/unordered_dense)
+- ConcurrentQueue
+  - `moodycamel::ConcurrentQueue` [https://github.com/cameron314/concurrentqueue](https://github.com/cameron314/concurrentqueue)
 
 ## License
 
