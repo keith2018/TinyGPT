@@ -106,7 +106,7 @@ BPE::BPE(const ankerl::unordered_dense::map<std::string, int32_t>& vocab,
 
   // cache
   if (enableCache) {
-    cache_ = std::make_unique<LRUCache>(32 * 512);
+    cache_ = std::make_unique<LRUCache>();
   }
 }
 

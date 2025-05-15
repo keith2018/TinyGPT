@@ -22,7 +22,7 @@ class LRUCache {
   using Key = std::string;
   using Value = std::vector<int32_t>;
 
-  explicit LRUCache(size_t capacity, size_t numSegments = 32);
+  explicit LRUCache(size_t capacity = NUM_MAX_CACHE, size_t numSegments = NUM_MAX_THREAD);
   ~LRUCache() = default;
 
   std::optional<Value> get(const Key& key) const;
@@ -55,7 +55,7 @@ class BPE : public Component {
  public:
   BPE(const ankerl::unordered_dense::map<std::string, int32_t>& vocab,
       const ankerl::unordered_dense::map<StringPair, int32_t, StringPairHash>& merges, bool ignoreMerges = false,
-      bool enableCache = true);
+      bool enableCache = false);
 
   ComponentType getType() override { return ComponentType::BPE; }
 
