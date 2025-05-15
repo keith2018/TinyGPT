@@ -10,65 +10,42 @@
 
 namespace tinygpt::tokenizer {
 
-LRUCache::LRUCache(size_t capacity, size_t numSegments) : capacity_(capacity), numSegments_(numSegments) {
-  segments_.resize(numSegments);
-  size_t perSegment = (capacity + numSegments - 1) / numSegments;
-  for (auto& seg : segments_) {
-    seg = std::make_unique<Segment>(perSegment);
-  }
-}
+LRUCache::LRUCache(size_t capacity) : capacity_(capacity) { assert(capacity > 0); }
 
 std::optional<LRUCache::Value> LRUCache::get(const Key& key) const {
-  auto& seg = segmentFor(key);
-  std::unique_lock lock(seg.mutex);
-  auto it = seg.map.find(key);
-  if (it == seg.map.end()) return std::nullopt;
-  seg.lru.splice(seg.lru.begin(), seg.lru, it->second);
-  return it->second->second;
+  const auto it = map_.find(key);
+  if (it == map_.end()) {
+    return std::nullopt;
+  }
+  list_.splice(list_.begin(), list_, it->second.second);
+  return it->second.first;
 }
 
 void LRUCache::put(const Key& key, Value&& value) const {
-  auto& seg = segmentFor(key);
-  std::unique_lock lock(seg.mutex);
-  auto it = seg.map.find(key);
-  if (it != seg.map.end()) {
-    it->second->second = std::move(value);
-    seg.lru.splice(seg.lru.begin(), seg.lru, it->second);
+  const auto it = map_.find(key);
+  if (it != map_.end()) {
+    it->second.first = std::move(value);
+    list_.splice(list_.begin(), list_, it->second.second);
   } else {
-    seg.lru.emplace_front(key, std::move(value));
-    seg.map[seg.lru.front().first] = seg.lru.begin();
-    if (seg.lru.size() > seg.capacity) {
-      auto last = seg.lru.end();
-      --last;
-      seg.map.erase(last->first);
-      seg.lru.pop_back();
+    if (map_.size() == capacity_) {
+      const Key& old_key = list_.back();
+      map_.erase(old_key);
+      list_.pop_back();
     }
+    list_.push_front(key);
+    map_.emplace(key, std::make_pair(std::move(value), list_.begin()));
   }
 }
 
 void LRUCache::erase(const Key& key) const {
-  auto& seg = segmentFor(key);
-  std::unique_lock lock(seg.mutex);
-  auto it = seg.map.find(key);
-  if (it != seg.map.end()) {
-    seg.lru.erase(it->second);
-    seg.map.erase(it);
+  const auto it = map_.find(key);
+  if (it != map_.end()) {
+    list_.erase(it->second.second);
+    map_.erase(it);
   }
 }
 
-size_t LRUCache::size() const {
-  size_t total = 0;
-  for (const auto& segPtr : segments_) {
-    std::shared_lock lock(segPtr->mutex);
-    total += segPtr->map.size();
-  }
-  return total;
-}
-
-LRUCache::Segment& LRUCache::segmentFor(const Key& key) const {
-  size_t h = ankerl::unordered_dense::hash<Key>{}(key);
-  return *segments_[h % numSegments_];
-}
+size_t LRUCache::size() const { return map_.size(); }
 
 BPE::BPE(const ankerl::unordered_dense::map<std::string, int32_t>& vocab,
          const ankerl::unordered_dense::map<StringPair, int32_t, StringPairHash>& merges, bool ignoreMerges,
@@ -103,11 +80,6 @@ BPE::BPE(const ankerl::unordered_dense::map<std::string, int32_t>& vocab,
     mergeRanksBackStr_.append(k.second);
     mergeRanks_[{std::string_view(ptr1, k.first.size()), std::string_view(ptr2, k.second.size())}] = v;
   }
-
-  // cache
-  if (enableCache) {
-    cache_ = std::make_unique<LRUCache>();
-  }
 }
 
 int32_t BPE::token2Id(const std::string& token) {
@@ -131,6 +103,8 @@ std::string BPE::id2Token(int32_t id) {
 }
 
 std::vector<int32_t> BPE::tokenize(const StringPieces& tokens) {
+  thread_local LRUCache cache_;
+
   std::vector<int32_t> ret;
   auto reserveSize = static_cast<float>(tokens.pieces.size()) * 1.5;
   ret.reserve(static_cast<size_t>(reserveSize));
@@ -148,7 +122,7 @@ std::vector<int32_t> BPE::tokenize(const StringPieces& tokens) {
 
     // cache
     if (enableCache_) {
-      auto cacheItem = cache_->get(token);
+      auto cacheItem = cache_.get(token);
       if (cacheItem) {
         ret.insert(ret.end(), cacheItem.value().begin(), cacheItem.value().end());
         continue;
@@ -169,7 +143,7 @@ std::vector<int32_t> BPE::tokenize(const StringPieces& tokens) {
     }
     ret.insert(ret.end(), ids.begin(), ids.end());
     if (enableCache_) {
-      cache_->put(token, std::move(ids));
+      cache_.put(token, std::move(ids));
     }
   }
   return ret;

@@ -7,9 +7,7 @@
 #pragma once
 
 #include <list>
-#include <memory>
 #include <optional>
-#include <shared_mutex>
 #include <string>
 #include <vector>
 
@@ -21,8 +19,9 @@ class LRUCache {
  public:
   using Key = std::string;
   using Value = std::vector<int32_t>;
+  using ListIt = std::list<Key>::iterator;
 
-  explicit LRUCache(size_t capacity = NUM_MAX_CACHE, size_t numSegments = NUM_MAX_THREAD);
+  explicit LRUCache(size_t capacity = NUM_MAX_CACHE);
   ~LRUCache() = default;
 
   std::optional<Value> get(const Key& key) const;
@@ -32,30 +31,16 @@ class LRUCache {
   size_t size() const;
 
  private:
-  struct Segment {
-    using List = std::list<std::pair<Key, Value>>;
-    using Map = ankerl::unordered_dense::map<Key, List::iterator>;
-
-    explicit Segment(size_t cap) : capacity(cap) {}
-
-    mutable std::shared_mutex mutex;
-    List lru;
-    Map map;
-    size_t capacity;
-  };
-
   size_t capacity_;
-  size_t numSegments_;
-  std::vector<std::unique_ptr<Segment>> segments_;
-
-  Segment& segmentFor(const Key& key) const;
+  mutable std::list<Key> list_;
+  mutable ankerl::unordered_dense::map<Key, std::pair<Value, ListIt>> map_;
 };
 
 class BPE : public Component {
  public:
   BPE(const ankerl::unordered_dense::map<std::string, int32_t>& vocab,
       const ankerl::unordered_dense::map<StringPair, int32_t, StringPairHash>& merges, bool ignoreMerges = false,
-      bool enableCache = false);
+      bool enableCache = true);
 
   ComponentType getType() override { return ComponentType::BPE; }
 
@@ -72,7 +57,6 @@ class BPE : public Component {
   ankerl::unordered_dense::map<std::string_view, int32_t> encoder_;
   ankerl::unordered_dense::map<int32_t, std::string> decoder_;
   ankerl::unordered_dense::map<StringViewPair, int32_t, StringViewPairHash> mergeRanks_;
-  std::unique_ptr<LRUCache> cache_;
 
   std::string encoderBackStr_;
   std::string mergeRanksBackStr_;
