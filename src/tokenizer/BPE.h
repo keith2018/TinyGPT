@@ -61,12 +61,11 @@ class BPE : public Component {
 
   int32_t token2Id(const std::string& token) override;
   std::string id2Token(int32_t id) override;
-  std::vector<int32_t> tokenize(const PreTokenizedString& tokens) override;
+  std::vector<int32_t> tokenize(const StringPieces& tokens) override;
 
  private:
   std::vector<std::string_view> bpeV1(std::string_view text);
   std::vector<std::string_view> bpeV2(std::string_view text);
-  static std::vector<std::string_view> splitUTF8(std::string_view str);
 
   bool ignoreMerges_;
   bool enableCache_;

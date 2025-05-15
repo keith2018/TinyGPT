@@ -29,7 +29,7 @@ class Split : public Component {
 
   ComponentType getType() override { return ComponentType::SPLIT; }
 
-  PreTokenizedString preTokenize(std::string_view text) override;
+  StringPieces preTokenize(const StringPieces &text) override;
 
   static std::vector<Range> split(std::string_view str, const Regex &matcher,
                                   SplitDelimiterBehavior behavior = SplitDelimiterBehavior::ISOLATED);

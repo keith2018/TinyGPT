@@ -15,7 +15,7 @@ void checkFloatVectorNear(const std::vector<float>& v1, const std::vector<float>
   }
 }
 
-std::vector<std::string> getStrings(const tokenizer::PreTokenizedString& input) {
+std::vector<std::string> getStrings(const tokenizer::StringPieces& input) {
   std::vector<std::string> result;
   result.reserve(input.pieces.size());
   for (const auto& r : input.pieces) {

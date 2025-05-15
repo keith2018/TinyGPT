@@ -19,14 +19,17 @@ class ByteLevel : public Component {
 
   ComponentType getType() override { return ComponentType::BYTE_LEVEL; }
 
-  PreTokenizedString preTokenize(std::string_view text) override;
+  StringPieces preTokenize(const StringPieces &text) override;
   std::vector<int32_t> postProcess(const std::vector<int32_t> &ids, bool addSpecialTokens) override;
   std::string decode(const std::vector<std::string> &pieces) override;
 
   static const std::vector<char32_t> &alphabet() { return bytesChar_; }
   static std::string utf8ToBytes(const std::string &str);
+  static std::vector<std::string_view> splitUTF8(std::string_view str);
 
  private:
+  static StringPieces byteLevelEncode(const Range *pieces, size_t pieceCnt, std::string_view backStr,
+                                      std::string_view firstPiece);
   static std::vector<char32_t> bytesToUtf8();
 
   bool addPrefixSpace_;

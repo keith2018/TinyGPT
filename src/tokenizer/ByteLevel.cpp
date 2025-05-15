@@ -98,6 +98,37 @@ std::string ByteLevel::utf8ToBytes(const std::string& str) {
   return result;
 }
 
+std::vector<std::string_view> ByteLevel::splitUTF8(std::string_view str) {
+  std::vector<std::string_view> results;
+  results.reserve(str.length());
+
+  size_t idx = 0;
+  while (idx < str.size()) {
+    auto c = static_cast<unsigned char>(str[idx]);
+    size_t charLen = 0;
+    if ((c & 0x80) == 0) {
+      // 1-byte: 0xxxxxxx
+      charLen = 1;
+    } else if ((c & 0xE0) == 0xC0) {
+      // 2-byte: 110xxxxx 10xxxxxx
+      if (idx + 1 < str.size() && (static_cast<unsigned char>(str[idx + 1]) & 0xC0) == 0x80) {
+        charLen = 2;
+      } else {
+        // malformed
+        LOGE("splitUTF8 error: invalid char: %c", c);
+        charLen = 1;
+      }
+    } else {
+      LOGE("splitUTF8 error: invalid char: %c", c);
+      // malformed
+      charLen = 1;
+    }
+    results.emplace_back(str.substr(idx, charLen));
+    idx += charLen;
+  }
+  return results;
+}
+
 ByteLevel::ByteLevel(bool addPrefixSpace, bool useRegex) : addPrefixSpace_(addPrefixSpace), useRegex_(useRegex) {
   if (useRegex_) {
     // Ref https://github.com/openai/gpt-2/blob/master/src/encoder.py
@@ -108,40 +139,58 @@ ByteLevel::ByteLevel(bool addPrefixSpace, bool useRegex) : addPrefixSpace_(addPr
   }
 }
 
-PreTokenizedString ByteLevel::preTokenize(std::string_view text) {
-  std::string_view inputView;
-  std::string inputStr;
-  if (addPrefixSpace_ && !text.empty() && text[0] != ' ') {
-    inputStr = ' ';
-    inputStr += text;
-    inputView = inputStr;
+StringPieces ByteLevel::preTokenize(const StringPieces& text) {
+  assert(!text.pieces.empty());
+  assert(!text.backStr.empty());
+
+  if (!useRegex_) {
+    auto& pieces = text.pieces;
+    auto& firstRange = pieces[0];
+    if (!addPrefixSpace_ || text.backStr[firstRange.first] == ' ') {
+      return byteLevelEncode(&pieces[0], pieces.size(), text.backStr, {});
+    } else {
+      std::string firstPiece;
+      firstPiece.reserve(firstRange.second - firstRange.first + 1);
+      firstPiece.push_back(' ');
+      firstPiece.append(text.backStr.data() + firstRange.first, firstRange.second - firstRange.first);
+      return byteLevelEncode(pieces.size() > 1 ? &pieces[1] : nullptr, pieces.size() - 1, text.backStr, firstPiece);
+    }
   } else {
-    inputView = text;
+    std::string_view inputView = text.backStr;
+    std::string inputWithSpace;
+    if (addPrefixSpace_ && inputView[0] != ' ') {
+      inputWithSpace.reserve(inputView.size() + 1);
+      inputWithSpace.push_back(' ');
+      inputWithSpace.append(inputView);
+      inputView = inputWithSpace;
+    }
+    auto pieces = Split::split(inputView, *matcher_, SplitDelimiterBehavior::ISOLATED);
+    return byteLevelEncode(&pieces[0], pieces.size(), inputView, {});
   }
+}
 
-  std::vector<Range> ranges;
-  if (useRegex_) {
-    ranges = Split::split(inputView, *matcher_, SplitDelimiterBehavior::ISOLATED);
-  } else {
-    ranges = {{0, inputView.size()}};
-  }
+StringPieces ByteLevel::byteLevelEncode(const Range* pieces, size_t pieceCnt, std::string_view backStr,
+                                        std::string_view firstPiece) {
+  StringPieces ret;
+  ret.pieces.reserve(pieceCnt + (firstPiece.empty() ? 0 : 1));
+  ret.backStr.reserve(backStr.size() * 2);
 
-  PreTokenizedString ret;
-  ret.pieces.reserve(ranges.size());
-
-  size_t strLen = 0;
-  for (const auto& r : ranges) {
-    strLen += r.second - r.first;
-  }
-  ret.backStr.reserve(strLen * 2);
-
-  for (const auto& r : ranges) {
+  auto appendPiece = [&](std::string_view sv) {
     const auto pos = ret.backStr.size();
-    for (uint32_t i = r.first; i < r.second; i++) {
-      const auto ch = static_cast<uint8_t>(inputView[i]);
+    for (auto c : sv) {
+      const auto ch = static_cast<uint8_t>(c);
       ret.backStr.append(byteUtf8Table_[ch].data(), byteUtf8Len_[ch]);
     }
     ret.pieces.emplace_back(pos, ret.backStr.size());
+  };
+
+  if (!firstPiece.empty()) {
+    appendPiece(firstPiece);
+  }
+
+  for (size_t i = 0; i < pieceCnt; i++) {
+    auto& r = pieces[i];
+    appendPiece(backStr.substr(r.first, r.second - r.first));
   }
   return ret;
 }

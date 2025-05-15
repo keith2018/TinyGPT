@@ -54,9 +54,26 @@ struct StringViewPairHash {
   static size_t combine(size_t h1, size_t h2) noexcept { return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2)); }
 };
 
-struct PreTokenizedString {
+struct StringPieces {
   std::vector<Range> pieces;
   std::string backStr;
+
+  StringPieces() = default;
+
+  StringPieces(const char *str) {  // NOLINT
+    backStr = str;
+    pieces = {{0, backStr.size()}};
+  }
+
+  StringPieces(std::string_view str) {  // NOLINT
+    backStr = str;
+    pieces = {{0, backStr.size()}};
+  }
+
+  StringPieces(std::string &&str) {  // NOLINT
+    backStr = std::move(str);
+    pieces = {{0, backStr.size()}};
+  }
 };
 
 class Component {
@@ -69,12 +86,12 @@ class Component {
   virtual std::string normalize(std::string_view text) { return {}; }
 
   // PreTokenizer
-  virtual PreTokenizedString preTokenize(std::string_view text) { return {}; }
+  virtual StringPieces preTokenize(const StringPieces &text) { return {}; }
 
   // Model
   virtual int32_t token2Id(const std::string &token) { return -1; }
   virtual std::string id2Token(int32_t id) { return {}; }
-  virtual std::vector<int32_t> tokenize(const PreTokenizedString &tokens) { return {}; }
+  virtual std::vector<int32_t> tokenize(const StringPieces &tokens) { return {}; }
 
   // PostProcessor
   virtual std::vector<int32_t> postProcess(const std::vector<int32_t> &ids, bool addSpecialTokens) { return {}; }
@@ -90,7 +107,7 @@ class ComponentSequence : public Component {
   void addComponent(std::unique_ptr<Component> &&component);
 
   // PreTokenizer
-  PreTokenizedString preTokenize(std::string_view text) override;
+  StringPieces preTokenize(const StringPieces &text) override;
 
   // PostProcessor
   std::vector<int32_t> postProcess(const std::vector<int32_t> &ids, bool addSpecialTokens) override;

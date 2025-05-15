@@ -23,6 +23,6 @@ void checkFloatVectorNear(const std::vector<float>& v1, const std::vector<float>
 
 #define EXPECT_FLOAT_VEC_NEAR checkFloatVectorNear
 
-std::vector<std::string> getStrings(const tokenizer::PreTokenizedString& input);
+std::vector<std::string> getStrings(const tokenizer::StringPieces& input);
 
 }  // namespace tinygpt

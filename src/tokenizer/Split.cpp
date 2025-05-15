@@ -19,14 +19,17 @@ Split::Split(std::string_view pattern, SplitDelimiterBehavior behavior, bool inv
   }
 }
 
-PreTokenizedString Split::preTokenize(std::string_view text) {
+StringPieces Split::preTokenize(const StringPieces &text) {
   if (!patternValid_) {
     return {};
   }
 
-  PreTokenizedString ret;
-  ret.backStr = text;
-  ret.pieces = split(text, *matcher_, behavior_);
+  StringPieces ret;
+  ret.backStr = text.backStr;
+  for (auto &r : text.pieces) {
+    auto splits = split({ret.backStr.data() + r.first, r.second - r.first}, *matcher_, behavior_);
+    ret.pieces.insert(ret.pieces.end(), splits.begin(), splits.end());
+  }
   return ret;
 }
 

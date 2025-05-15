@@ -183,12 +183,9 @@ std::vector<int32_t> Tokenizer::encodeWithModel(const std::string& text, bool ad
   } else {
     normedText = text;
   }
-  PreTokenizedString preTokenizedStr;
+  StringPieces preTokenizedStr(normedText);
   if (preTokenizer_) {
-    preTokenizedStr = preTokenizer_->preTokenize(normedText);
-  } else {
-    preTokenizedStr.backStr = normedText;
-    preTokenizedStr.pieces = {{0, normedText.size() - 1}};
+    preTokenizedStr = preTokenizer_->preTokenize(preTokenizedStr);
   }
   std::vector<int32_t> ids = model_->tokenize(preTokenizedStr);
   if (postProcessor_) {

@@ -130,7 +130,7 @@ std::string BPE::id2Token(int32_t id) {
   return {};
 }
 
-std::vector<int32_t> BPE::tokenize(const PreTokenizedString& tokens) {
+std::vector<int32_t> BPE::tokenize(const StringPieces& tokens) {
   std::vector<int32_t> ret;
   auto reserveSize = static_cast<float>(tokens.pieces.size()) * 1.5;
   ret.reserve(static_cast<size_t>(reserveSize));
@@ -181,7 +181,7 @@ std::vector<std::string_view> BPE::bpeV1(std::string_view text) {
     uint32_t rank;
   };
 
-  auto words = splitUTF8(text);
+  auto words = ByteLevel::splitUTF8(text);
   std::vector<WordsRank> ranks(words.size() + 1);
   for (uint32_t i = 0; i < ranks.size(); i++) {
     ranks[i].pos = words[i].data() - text.data();
@@ -250,7 +250,7 @@ std::vector<std::string_view> BPE::bpeV2(std::string_view text) {
     WordsRank* next;
   };
 
-  auto words = splitUTF8(text);
+  auto words = ByteLevel::splitUTF8(text);
   std::vector<WordsRank> ranks(words.size() + 1);
 
   // init ranks
@@ -324,37 +324,6 @@ std::vector<std::string_view> BPE::bpeV2(std::string_view text) {
     ret.emplace_back(text.data() + ptr->pos, ptr->next->pos - ptr->pos);
   }
   return ret;
-}
-
-std::vector<std::string_view> BPE::splitUTF8(std::string_view str) {
-  std::vector<std::string_view> results;
-  results.reserve(str.length());
-
-  size_t idx = 0;
-  while (idx < str.size()) {
-    auto c = static_cast<unsigned char>(str[idx]);
-    size_t charLen = 0;
-    if ((c & 0x80) == 0) {
-      // 1-byte: 0xxxxxxx
-      charLen = 1;
-    } else if ((c & 0xE0) == 0xC0) {
-      // 2-byte: 110xxxxx 10xxxxxx
-      if (idx + 1 < str.size() && (static_cast<unsigned char>(str[idx + 1]) & 0xC0) == 0x80) {
-        charLen = 2;
-      } else {
-        // malformed
-        LOGE("splitUTF8 error: invalid char: %c", c);
-        charLen = 1;
-      }
-    } else {
-      LOGE("splitUTF8 error: invalid char: %c", c);
-      // malformed
-      charLen = 1;
-    }
-    results.emplace_back(str.substr(idx, charLen));
-    idx += charLen;
-  }
-  return results;
 }
 
 }  // namespace tinygpt::tokenizer
