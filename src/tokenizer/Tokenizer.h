@@ -77,7 +77,9 @@ class Tokenizer {
   std::string addedPattern_;
   std::unique_ptr<Regex> addedMatcher_;
   ankerl::unordered_dense::map<std::string, int32_t> addedEncoder_;
-  ankerl::unordered_dense::map<int32_t, std::string> addedDecoder_;
+  int32_t minAddedTokenId_ = -1;
+  int32_t maxAddedTokenId_ = -1;
+  std::vector<std::string> addedDecoder_;
 
   // threads management
   std::vector<std::thread> threads_;

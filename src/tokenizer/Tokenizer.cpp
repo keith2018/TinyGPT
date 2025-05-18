@@ -85,9 +85,8 @@ int32_t Tokenizer::token2Id(const std::string& token) {
 }
 
 std::string Tokenizer::id2Token(int32_t id) {
-  auto it = addedDecoder_.find(id);
-  if (it != addedDecoder_.end()) {
-    return it->second;
+  if (id >= minAddedTokenId_ && id <= maxAddedTokenId_) {
+    return addedDecoder_[id - minAddedTokenId_];
   }
   return model_->id2Token(id);
 }
@@ -150,12 +149,20 @@ std::vector<std::string> Tokenizer::decodeBatch(const std::vector<std::vector<in
 
 void Tokenizer::addTokens(const ankerl::unordered_dense::map<std::string, int32_t>& tokens) {
   addedEncoder_ = tokens;
-  int32_t idx = 0;
+  minAddedTokenId_ = std::numeric_limits<int32_t>::max();
+  int32_t cnt = 0;
   for (auto& [k, v] : tokens) {
-    addedDecoder_[v] = k;
-    if (idx > 0) addedPattern_ += "|";
+    minAddedTokenId_ = std::min(minAddedTokenId_, v);
+    maxAddedTokenId_ = std::max(maxAddedTokenId_, v);
+    if (cnt > 0) {
+      addedPattern_ += "|";
+    }
     addedPattern_ += Regex::quoteMeta(k);
-    idx++;
+    cnt++;
+  }
+  addedDecoder_.resize(maxAddedTokenId_ - minAddedTokenId_ + 1);
+  for (auto& [k, v] : tokens) {
+    addedDecoder_[v - minAddedTokenId_] = k;
   }
   if (!addedPattern_.empty()) {
     addedMatcher_ = std::make_unique<Regex>("(" + addedPattern_ + ")");

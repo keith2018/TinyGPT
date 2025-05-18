@@ -53,12 +53,14 @@ BPE::BPE(const ankerl::unordered_dense::map<std::string, int32_t>& vocab,
     : ignoreMerges_(ignoreMerges), enableCache_(enableCache) {
   // encoder_ & decoder_
   size_t encoderStrLen = 0;
+  int32_t maxTokenId = -std::numeric_limits<int32_t>::max();
   for (auto& [k, v] : vocab) {
     encoderStrLen += k.size();
+    maxTokenId = std::max(maxTokenId, v);
   }
   encoderBackStr_.reserve(encoderStrLen);
   encoder_.reserve(vocab.size());
-  decoder_.reserve(vocab.size());
+  decoder_.resize(maxTokenId + 1);
   for (auto& [k, v] : vocab) {
     const auto* ptr = encoderBackStr_.data() + encoderBackStr_.size();
     encoderBackStr_.append(k);
@@ -93,9 +95,8 @@ int32_t BPE::token2Id(const std::string& token) {
 }
 
 std::string BPE::id2Token(int32_t id) {
-  auto it = decoder_.find(id);
-  if (it != decoder_.end()) {
-    return it->second;
+  if (id < decoder_.size()) {
+    return decoder_[id];
   }
 
   LOGE("error decode id: %d", id);
