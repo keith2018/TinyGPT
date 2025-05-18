@@ -147,6 +147,61 @@ std::vector<std::string> Tokenizer::decodeBatch(const std::vector<std::vector<in
   return results;
 }
 
+std::string Tokenizer::decodeStream(const std::vector<int32_t>& ids) {
+  size_t totalNewLen = 0;
+  std::vector<std::string> newTokens;
+  newTokens.reserve(ids.size());
+
+  // decode new ids
+  for (auto& id : ids) {
+    std::string tokenStr = id2Token(id);
+    totalNewLen += tokenStr.size();
+    newTokens.push_back(std::move(tokenStr));
+  }
+
+  // add to cache
+  streamCacheToken_.reserve(streamCacheToken_.size() + ids.size());
+  streamCacheStr_.reserve(streamCacheStr_.size() + totalNewLen);
+  for (size_t i = 0; i < ids.size(); i++) {
+    streamCacheToken_.push_back({ids[i], newTokens[i].size()});
+    streamCacheStr_ += newTokens[i];
+  }
+
+  // check utf8 complete
+  auto incompletePos = ByteLevel::findIncompletePos(streamCacheStr_);
+  if (incompletePos < 0) {
+    streamCacheToken_.clear();
+    std::string retStr = std::move(streamCacheStr_);
+    streamCacheStr_.clear();
+    return retStr;
+  }
+
+  size_t incompleteLen = streamCacheStr_.size() - incompletePos;
+  size_t totalIncompleteLen = 0;
+  auto keepTokens = static_cast<int32_t>(streamCacheToken_.size());
+  while (keepTokens > 0) {
+    totalIncompleteLen += streamCacheToken_[keepTokens - 1].len;
+    if (totalIncompleteLen >= incompleteLen) {
+      break;
+    }
+    keepTokens--;
+  }
+
+  if (keepTokens <= 0) {
+    streamCacheToken_.clear();
+    streamCacheStr_.clear();
+    return {};
+  }
+
+  // adjust cache
+  streamCacheToken_.resize(keepTokens);
+
+  auto splitPos = streamCacheStr_.size() - totalIncompleteLen;
+  auto retStr = streamCacheStr_.substr(0, splitPos);
+  streamCacheStr_ = streamCacheStr_.substr(splitPos);
+  return retStr;
+}
+
 void Tokenizer::addTokens(const ankerl::unordered_dense::map<std::string, int32_t>& tokens) {
   addedEncoder_ = tokens;
   minAddedTokenId_ = std::numeric_limits<int32_t>::max();

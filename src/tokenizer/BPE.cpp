@@ -95,7 +95,7 @@ int32_t BPE::token2Id(const std::string& token) {
 }
 
 std::string BPE::id2Token(int32_t id) {
-  if (id < decoder_.size()) {
+  if (id >= 0 && id < static_cast<int32_t>(decoder_.size())) {
     return decoder_[id];
   }
 

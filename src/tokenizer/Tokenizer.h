@@ -43,6 +43,9 @@ class Tokenizer {
   std::string decode(const std::vector<int32_t>& ids);
   std::vector<std::string> decodeBatch(const std::vector<std::vector<int32_t>>& ids, uint32_t numThreads = 8);
 
+  // check whether the utf-8 sequence is complete, if not, return it on the next call.
+  std::string decodeStream(const std::vector<int32_t>& ids);
+
   int32_t bosTokenId() const { return bosTokenId_; }
   int32_t eosTokenId() const { return eosTokenId_; }
   int32_t padTokenId() const { return padTokenId_; }
@@ -72,6 +75,14 @@ class Tokenizer {
 
   bool addBosToken_ = false;
   bool addEosToken_ = false;
+
+  // stream decode cache
+  struct TokenStreamCache {
+    int32_t id;
+    size_t len;
+  };
+  std::vector<TokenStreamCache> streamCacheToken_;
+  std::string streamCacheStr_;
 
   // added tokens
   std::string addedPattern_;
