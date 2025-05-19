@@ -24,7 +24,8 @@ class ByteLevel : public Component {
   std::string decode(const std::vector<std::string> &pieces) override;
 
   static const std::vector<char32_t> &alphabet() { return bytesChar_; }
-  static std::string utf8ToBytes(const std::string &str);
+  static std::string utf8ToBytes(std::string_view str);
+  static int32_t findIncompletePos(std::string_view str);
   static std::vector<std::string_view> splitUTF8(std::string_view str);
 
  private:

@@ -55,7 +55,7 @@ class BPE : public Component {
   bool ignoreMerges_;
   bool enableCache_;
   ankerl::unordered_dense::map<std::string_view, int32_t> encoder_;
-  ankerl::unordered_dense::map<int32_t, std::string> decoder_;
+  std::vector<std::string> decoder_;
   ankerl::unordered_dense::map<StringViewPair, int32_t, StringViewPairHash> mergeRanks_;
 
   std::string encoderBackStr_;

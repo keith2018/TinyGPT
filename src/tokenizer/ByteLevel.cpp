@@ -63,13 +63,13 @@ const std::array<std::array<char, 2>, 256> ByteLevel::byteUtf8Table_ = [] {
   return makeByteUtf8Table(ByteLevel::bytesChar_, len);
 }();
 
-std::string ByteLevel::utf8ToBytes(const std::string& str) {
-  static std::unordered_map<std::string, uint8_t> utf8ToByte;
+std::string ByteLevel::utf8ToBytes(std::string_view str) {
+  static std::unordered_map<std::string_view, uint8_t> utf8ToByte;
   static bool inited = false;
   if (!inited) {
     for (int16_t i = 0; i < 256; ++i) {
       const auto len = byteUtf8Len_[i];
-      std::string key(byteUtf8Table_[i].data(), len);
+      std::string_view key(byteUtf8Table_[i].data(), len);
       utf8ToByte[key] = static_cast<uint8_t>(i);
     }
     inited = true;
@@ -81,7 +81,7 @@ std::string ByteLevel::utf8ToBytes(const std::string& str) {
     bool found = false;
     for (auto len = 1; len <= 2; len++) {
       if (i + len <= str.size()) {
-        std::string key = str.substr(i, len);
+        auto key = str.substr(i, len);
         auto it = utf8ToByte.find(key);
         if (it != utf8ToByte.end()) {
           result.push_back(static_cast<char>(it->second));
@@ -92,10 +92,47 @@ std::string ByteLevel::utf8ToBytes(const std::string& str) {
       }
     }
     if (!found) {
-      LOGE("Invalid byte level utf8 string %s at position %d", str.c_str(), i);
+      LOGE("Invalid byte level utf8 string %s at position %d", str.data(), i);
     }
   }
   return result;
+}
+
+int32_t ByteLevel::findIncompletePos(std::string_view str) {
+  const auto len = static_cast<int32_t>(str.size());
+  if (len == 0) {
+    return -1;
+  }
+
+  auto maxCheck = std::min(4, len);
+  auto first = len - 1;
+  while (first >= 0 && (len - first) <= 4) {
+    auto c = static_cast<unsigned char>(str[first]);
+    if ((c & 0xC0) != 0x80) {
+      int32_t expected;
+      if ((c & 0x80) == 0) {
+        expected = 1;
+      } else if ((c & 0xE0) == 0xC0) {
+        expected = 2;
+      } else if ((c & 0xF0) == 0xE0) {
+        expected = 3;
+      } else if ((c & 0xF8) == 0xF0) {
+        expected = 4;
+      } else {
+        return first;
+      }
+      auto actual = len - first;
+      if (actual < expected) {
+        return first;
+      }
+      return -1;
+    }
+    first--;
+  }
+  if (maxCheck == len) {
+    return 0;
+  }
+  return -1;
 }
 
 std::vector<std::string_view> ByteLevel::splitUTF8(std::string_view str) {
