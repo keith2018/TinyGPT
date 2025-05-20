@@ -25,6 +25,7 @@ PYBIND11_MODULE(_tinygpt, m) {
            py::arg("allowAddedTokens") = true)
       .def("decode", &tokenizer::Tokenizer::decode, py::arg("ids"))
       .def("decodeBatch", &tokenizer::Tokenizer::decodeBatch, py::arg("ids"), py::arg("numThreads") = 8)
+      .def("decodeStream", &tokenizer::Tokenizer::decodeStream, py::arg("ids"))
       .def_property_readonly("bosTokenId", &tokenizer::Tokenizer::bosTokenId)
       .def_property_readonly("eosTokenId", &tokenizer::Tokenizer::eosTokenId)
       .def_property_readonly("padTokenId", &tokenizer::Tokenizer::padTokenId)
