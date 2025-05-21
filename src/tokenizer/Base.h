@@ -16,9 +16,6 @@
 
 namespace tinygpt::tokenizer {
 
-constexpr uint32_t NUM_MAX_THREAD = 128;
-constexpr uint32_t NUM_MAX_CACHE = 128 * 1024;
-
 enum class ComponentType {
   UNKNOWN = 0,
   SEQUENCE,

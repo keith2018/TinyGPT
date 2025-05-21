@@ -15,6 +15,8 @@
 
 namespace tinygpt::tokenizer {
 
+constexpr uint32_t NUM_MAX_CACHE = 128 * 1024;
+
 class LRUCache {
  public:
   using Key = std::string;

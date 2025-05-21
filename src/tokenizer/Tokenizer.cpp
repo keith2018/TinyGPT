@@ -275,10 +275,9 @@ void Tokenizer::parallelFor(const std::vector<Input>& inputs, std::vector<Output
   if (n == 0) {
     return;
   }
-  if (numThreads >= NUM_MAX_THREAD) {
-    LOGE("invalid numThreads, maximum: %d", NUM_MAX_THREAD);
-    numThreads = NUM_MAX_THREAD;
-  }
+
+  static auto maxThreads = std::thread::hardware_concurrency();
+  numThreads = std::min<uint32_t>(numThreads, maxThreads);
   numThreads = std::min<uint32_t>(numThreads, n);
 
   {

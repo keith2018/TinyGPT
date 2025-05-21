@@ -5,6 +5,11 @@ requires = [
 ]
 build-backend = "scikit_build_core.build"
 
+[tool.scikit-build]
+cmake.args = [
+    "-DCMAKE_BUILD_TYPE=Release"
+]
+
 [project]
 name = "tinygpt"
 version = "0.0.1"
