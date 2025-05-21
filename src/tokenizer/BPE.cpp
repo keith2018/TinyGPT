@@ -6,6 +6,9 @@
 
 #include "BPE.h"
 
+#include <limits>
+#include <queue>
+
 #include "ByteLevel.h"
 
 namespace tinygpt::tokenizer {
@@ -131,7 +134,8 @@ std::vector<int32_t> BPE::tokenize(const StringPieces& tokens) {
     }
 
     // bpe
-    std::vector<std::string_view> bpePieces = bpeV2(token);
+    constexpr size_t FAST_BPE_THRESHOLD = 32;
+    auto bpePieces = token.size() > FAST_BPE_THRESHOLD ? bpeV2(token) : bpeV1(token);
     std::vector<int32_t> ids;
     ids.reserve(bpePieces.size());
     for (auto& bpePiece : bpePieces) {
@@ -151,27 +155,25 @@ std::vector<int32_t> BPE::tokenize(const StringPieces& tokens) {
 }
 
 std::vector<std::string_view> BPE::bpeV1(std::string_view text) {
-  struct WordsRank {
+  struct Node {
     uint32_t pos;
     uint32_t rank;
   };
 
   auto words = ByteLevel::splitUTF8(text);
-  std::vector<WordsRank> ranks(words.size() + 1);
-  for (uint32_t i = 0; i < ranks.size(); i++) {
-    ranks[i].pos = words[i].data() - text.data();
-    ranks[i].rank = std::numeric_limits<uint32_t>::max();
+  std::vector<Node> nodes(words.size() + 1);
+  for (uint32_t i = 0; i < nodes.size(); i++) {
+    nodes[i].pos = (i < nodes.size() - 1) ? (words[i].data() - text.data()) : text.size();
+    nodes[i].rank = std::numeric_limits<uint32_t>::max();
   }
-  ranks.back().pos = text.size();
-  ranks.back().rank = std::numeric_limits<uint32_t>::max();
 
-  auto getRank = [&text, &ranks, this](uint32_t idx1, uint32_t idx2, uint32_t idx3) -> uint32_t {
-    if (idx3 >= ranks.size()) {
+  auto getRank = [&text, &nodes, this](uint32_t idx1, uint32_t idx2, uint32_t idx3) -> uint32_t {
+    if (idx3 >= nodes.size()) {
       return std::numeric_limits<uint32_t>::max();
     }
-    const auto start = ranks[idx1].pos;
-    const auto end1 = ranks[idx2].pos;
-    const auto end2 = ranks[idx3].pos;
+    const auto start = nodes[idx1].pos;
+    const auto end1 = nodes[idx2].pos;
+    const auto end2 = nodes[idx3].pos;
     std::string_view str1 = {text.data() + start, end1 - start};
     std::string_view str2 = {text.data() + end1, end2 - end1};
     const auto it = mergeRanks_.find({str1, str2});
@@ -181,18 +183,18 @@ std::vector<std::string_view> BPE::bpeV1(std::string_view text) {
     return std::numeric_limits<uint32_t>::max();
   };
 
-  for (uint32_t i = 0; i < ranks.size() - 2; i++) {
-    ranks[i].rank = getRank(i, i + 1, i + 2);
+  for (uint32_t i = 0; i < nodes.size() - 2; i++) {
+    nodes[i].rank = getRank(i, i + 1, i + 2);
   }
 
   while (true) {
-    if (ranks.size() == 1) {
+    if (nodes.size() == 1) {
       break;
     }
 
     auto minRank = std::make_pair<uint32_t, uint32_t>(std::numeric_limits<uint32_t>::max(), 0);
-    for (uint32_t i = 0; i < ranks.size() - 1; i++) {
-      auto rank = ranks[i].rank;
+    for (uint32_t i = 0; i < nodes.size() - 1; i++) {
+      auto rank = nodes[i].rank;
       if (rank < minRank.first) {
         minRank = {rank, i};
       }
@@ -203,101 +205,123 @@ std::vector<std::string_view> BPE::bpeV1(std::string_view text) {
     }
 
     auto minIdx = minRank.second;
-    ranks[minIdx].rank = getRank(minIdx, minIdx + 2, minIdx + 3);
+    nodes[minIdx].rank = getRank(minIdx, minIdx + 2, minIdx + 3);
     if (minIdx > 0) {
-      ranks[minIdx - 1].rank = getRank(minIdx - 1, minIdx, minIdx + 2);
+      nodes[minIdx - 1].rank = getRank(minIdx - 1, minIdx, minIdx + 2);
     }
-    ranks.erase(ranks.begin() + (minIdx + 1));
+    nodes.erase(nodes.begin() + (minIdx + 1));
   }
 
   std::vector<std::string_view> ret;
-  ret.reserve(ranks.size() - 1);
-  for (uint32_t i = 0; i < ranks.size() - 1; i++) {
-    ret.emplace_back(text.data() + ranks[i].pos, ranks[i + 1].pos - ranks[i].pos);
+  ret.reserve(nodes.size() - 1);
+  for (uint32_t i = 0; i < nodes.size() - 1; i++) {
+    ret.emplace_back(text.data() + nodes[i].pos, nodes[i + 1].pos - nodes[i].pos);
   }
   return ret;
 }
 
 std::vector<std::string_view> BPE::bpeV2(std::string_view text) {
-  struct WordsRank {
+  struct Node {
     uint32_t pos;
     uint32_t rank;
-    WordsRank* next;
+    Node* prev;
+    Node* next;
+    bool active;
   };
 
   auto words = ByteLevel::splitUTF8(text);
-  std::vector<WordsRank> ranks(words.size() + 1);
+  std::vector<Node> nodes(words.size() + 1);
 
-  // init ranks
-  for (uint32_t i = 0; i < ranks.size(); i++) {
-    ranks[i].pos = words[i].data() - text.data();
-    ranks[i].rank = std::numeric_limits<uint32_t>::max();
-    ranks[i].next = &ranks[i + 1];
+  for (uint32_t i = 0; i < nodes.size(); i++) {
+    nodes[i].pos = (i < words.size()) ? (words[i].data() - text.data()) : text.size();
+    nodes[i].prev = (i > 0) ? &nodes[i - 1] : nullptr;
+    nodes[i].next = (i < nodes.size() - 1) ? &nodes[i + 1] : nullptr;
+    nodes[i].rank = std::numeric_limits<uint32_t>::max();
+    nodes[i].active = true;
   }
-  ranks.back().pos = text.size();
-  ranks.back().rank = std::numeric_limits<uint32_t>::max();
-  ranks.back().next = nullptr;
 
-  auto getRank = [&text, this](WordsRank* ptr) -> uint32_t {
-    if (ptr->next->next == nullptr) {
+  auto getRank = [&text, this](const Node* node) -> uint32_t {
+    if (!node || !node->next || !node->next->next) {
       return std::numeric_limits<uint32_t>::max();
     }
-    const auto start = ptr->pos;
-    const auto end1 = ptr->next->pos;
-    const auto end2 = ptr->next->next->pos;
-    std::string_view str1 = {text.data() + start, end1 - start};
-    std::string_view str2 = {text.data() + end1, end2 - end1};
-    const auto it = mergeRanks_.find({str1, str2});
+
+    const uint32_t start = node->pos;
+    const uint32_t mid = node->next->pos;
+    const uint32_t end = node->next->next->pos;
+
+    std::string_view str1(text.data() + start, mid - start);
+    std::string_view str2(text.data() + mid, end - mid);
+
+    auto it = mergeRanks_.find({str1, str2});
     if (it != mergeRanks_.end()) {
       return it->second;
     }
     return std::numeric_limits<uint32_t>::max();
   };
 
-  // update ranks
-  for (uint32_t i = 0; i < ranks.size() - 2; i++) {
-    ranks[i].rank = getRank(&ranks[i]);
+  using QueueElem = std::pair<uint32_t, Node*>;  // <rank, node>
+  auto cmp = [](const QueueElem& a, const QueueElem& b) {
+    // If ranks are equal, prioritize the smaller index
+    if (a.first == b.first) {
+      return a.second->pos > b.second->pos;
+    }
+    return a.first > b.first;
+  };
+  std::priority_queue<QueueElem, std::vector<QueueElem>, decltype(cmp)> pq(cmp);
+  for (auto& node : nodes) {
+    if (node.next) {
+      node.rank = getRank(&node);
+      if (node.rank != std::numeric_limits<uint32_t>::max()) {
+        pq.emplace(node.rank, &node);
+      }
+    }
   }
 
-  uint32_t validRanksCnt = 0;
-  while (true) {
-    auto minRank = std::numeric_limits<uint32_t>::max();
-    WordsRank* minRankPtr = nullptr;
-    WordsRank* minRankPrevPtr = nullptr;
+  while (!pq.empty()) {
+    auto [minRank, node] = pq.top();
+    pq.pop();
 
-    WordsRank* prev = nullptr;
-    WordsRank* curr = &ranks[0];
-    validRanksCnt = 0;
-    while (curr) {
-      if (curr->rank < minRank) {
-        minRank = curr->rank;
-        minRankPtr = curr;
-        minRankPrevPtr = prev;
-      }
-      prev = curr;
-      curr = curr->next;
-      validRanksCnt++;
+    if (!node->active || node->rank != minRank) {
+      continue;
+    }
+    Node* nextNode = node->next;
+    if (!nextNode || !nextNode->active) {
+      continue;
     }
 
-    if (minRankPtr == nullptr) {
-      break;
-    }
+    // mark not active
+    nextNode->active = false;
 
     // merge with next
-    minRankPtr->next = minRankPtr->next->next;
-    minRankPtr->rank = getRank(minRankPtr);
+    node->next = nextNode->next;
+    if (node->next) {
+      node->next->prev = node;
+    }
 
-    // update prev rank
-    if (minRankPrevPtr != nullptr) {
-      minRankPrevPtr->rank = getRank(minRankPrevPtr);
+    // update rank
+    const uint32_t oldRank = node->rank;
+    node->rank = getRank(node);
+    if (node->rank != oldRank && node->rank != std::numeric_limits<uint32_t>::max()) {
+      pq.emplace(node->rank, node);
+    }
+
+    // update prev node
+    if (node->prev && node->prev->active) {
+      const uint32_t prevOldRank = node->prev->rank;
+      node->prev->rank = getRank(node->prev);
+      if (node->prev->rank != prevOldRank && node->prev->rank != std::numeric_limits<uint32_t>::max()) {
+        pq.emplace(node->prev->rank, node->prev);
+      }
     }
   }
 
   std::vector<std::string_view> ret;
-  ret.reserve(validRanksCnt - 1);
-  for (auto* ptr = &ranks[0]; ptr && ptr->next; ptr = ptr->next) {
-    ret.emplace_back(text.data() + ptr->pos, ptr->next->pos - ptr->pos);
+  for (Node* curr = &nodes[0]; curr; curr = curr->next) {
+    if (curr->active && curr->next) {
+      ret.emplace_back(text.data() + curr->pos, curr->next->pos - curr->pos);
+    }
   }
+
   return ret;
 }
 

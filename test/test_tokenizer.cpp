@@ -169,3 +169,18 @@ TEST(TEST_tokenizer, tokenizer_batch) {
   auto decodeRet = tokenizer.decodeBatch({ids, ids, ids});
   EXPECT_TRUE(decodeRet == std::vector({decodeText, decodeText, decodeText}));
 }
+
+TEST(TEST_tokenizer, tokenizer_long_text) {
+  tokenizer::Tokenizer tokenizer;
+  bool initOk =
+      tokenizer.initWithConfigHF("assets/Llama-3.1-8B/tokenizer.json", "assets/Llama-3.1-8B/tokenizer_config.json");
+  EXPECT_TRUE(initOk);
+
+  std::string text(500000, 'a');
+  auto ids = tokenizer.encode(text);
+  EXPECT_TRUE(ids.size() == 62501);
+  EXPECT_TRUE(ids[0] == 128000);
+  for (auto i = 1; i < ids.size(); i++) {
+    EXPECT_TRUE(ids[i] == 70540);
+  }
+}
