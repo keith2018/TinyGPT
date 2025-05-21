@@ -73,8 +73,8 @@ def benchmark_batch(model: str, documents: list[str], num_threads: int, document
     tinygpt_enc = tinygpt.Tokenizer()
     tokenizer_path = hf_hub_download(MODEL_ID, "tokenizer.json")
     tokenizer_config_path = hf_hub_download(MODEL_ID, "tokenizer_config.json")
-    tinygpt_enc.initWithConfigHF(tokenizer_path, tokenizer_config_path)
-    out3 = tinygpt_enc.encode("This is a test", allowAddedTokens=False)
+    tinygpt_enc.init_with_config_hf(tokenizer_path, tokenizer_config_path)
+    out3 = tinygpt_enc.encode("This is a test", allow_added_tokens=False)
 
     assert out == out2, "sanity check"
     assert out == out3, "sanity check"
@@ -95,7 +95,7 @@ def benchmark_batch(model: str, documents: list[str], num_threads: int, document
 
 
     start = time.perf_counter_ns()
-    tinygpt_enc.encodeBatch(documents, numThreads=num_threads, allowAddedTokens=False)
+    tinygpt_enc.encode_batch(documents, num_threads=num_threads, allow_added_tokens=False)
     end = time.perf_counter_ns()
     readable_size, unit = format_byte_size(num_bytes / (end - start) * 1e9)
     print(f"tinygpt \t{readable_size} / s")

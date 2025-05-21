@@ -11,25 +11,27 @@
 namespace py = pybind11;
 using namespace tinygpt;
 
+// clang-format off
+
 PYBIND11_MODULE(_tinygpt, m) {
   // Tokenizer
   py::class_<tokenizer::Tokenizer>(m, "Tokenizer")
       .def(py::init<>())
-      .def("initWithConfigHF", &tokenizer::Tokenizer::initWithConfigHF, py::arg("tokenizerPath"), py::arg("cfgPath"))
-      .def("initWithConfigGPT2", &tokenizer::Tokenizer::initWithConfigGPT2, py::arg("encoderPath"),
-           py::arg("vocabPath"))
-      .def("token2Id", &tokenizer::Tokenizer::token2Id, py::arg("token"))
-      .def("id2Token", &tokenizer::Tokenizer::id2Token, py::arg("id"))
-      .def("encode", &tokenizer::Tokenizer::encode, py::arg("text"), py::arg("allowAddedTokens") = true)
-      .def("encodeBatch", &tokenizer::Tokenizer::encodeBatch, py::arg("texts"), py::arg("numThreads") = 8,
-           py::arg("allowAddedTokens") = true)
+      .def("init_with_config_hf", &tokenizer::Tokenizer::initWithConfigHF, py::arg("tokenizer_path"), py::arg("cfg_path"))
+      .def("init_with_config_gpt2", &tokenizer::Tokenizer::initWithConfigGPT2, py::arg("encoder_path"), py::arg("vocab_path"))
+      .def("token_to_id", &tokenizer::Tokenizer::token2Id, py::arg("token"))
+      .def("id_to_token", &tokenizer::Tokenizer::id2Token, py::arg("id"))
+      .def("encode", &tokenizer::Tokenizer::encode, py::arg("text"), py::arg("allow_added_tokens") = true)
+      .def("encode_batch", &tokenizer::Tokenizer::encodeBatch, py::arg("texts"), py::arg("num_threads") = 8, py::arg("allow_added_tokens") = true)
       .def("decode", &tokenizer::Tokenizer::decode, py::arg("ids"))
-      .def("decodeBatch", &tokenizer::Tokenizer::decodeBatch, py::arg("ids"), py::arg("numThreads") = 8)
-      .def("decodeStream", &tokenizer::Tokenizer::decodeStream, py::arg("ids"))
-      .def_property_readonly("bosTokenId", &tokenizer::Tokenizer::bosTokenId)
-      .def_property_readonly("eosTokenId", &tokenizer::Tokenizer::eosTokenId)
-      .def_property_readonly("padTokenId", &tokenizer::Tokenizer::padTokenId)
-      .def("bosTokenStr", &tokenizer::Tokenizer::bosTokenStr)
-      .def("eosTokenStr", &tokenizer::Tokenizer::eosTokenStr)
-      .def("padTokenStr", &tokenizer::Tokenizer::padTokenStr);
+      .def("decode_batch", &tokenizer::Tokenizer::decodeBatch, py::arg("ids"), py::arg("num_threads") = 8)
+      .def("decode_stream", &tokenizer::Tokenizer::decodeStream, py::arg("ids"))
+      .def_property_readonly("bos_token_id", &tokenizer::Tokenizer::bosTokenId)
+      .def_property_readonly("eos_token_id", &tokenizer::Tokenizer::eosTokenId)
+      .def_property_readonly("pad_token_id", &tokenizer::Tokenizer::padTokenId)
+      .def("bos_token_str", &tokenizer::Tokenizer::bosTokenStr)
+      .def("eos_token_str", &tokenizer::Tokenizer::eosTokenStr)
+      .def("pad_token_str", &tokenizer::Tokenizer::padTokenStr);
 }
+
+// clang-format on

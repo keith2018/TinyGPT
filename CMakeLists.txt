@@ -3,7 +3,7 @@ project(TinyGPT)
 
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 
-option(TINYGPT_BUILD_PYBINDING "Whether or not to build pybinding" ON)
+option(TINYGPT_BUILD_PYBINDING "Whether or not to build pybinding" OFF)
 option(TINYGPT_BUILD_DEMO "Whether or not to build demo" ON)
 option(TINYGPT_BUILD_TEST "Whether or not to build the tests" ON)
 

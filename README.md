@@ -48,6 +48,17 @@ GPT:the most powerful machines on the planet.
 INPUT:exit
 ```
 
+## Python binding
+
+```python
+# pip install .
+
+import tinygpt
+enc = tinygpt.Tokenizer()
+enc.init_with_config_hf("tokenizer.json", "tokenizer_config.json")
+ids = enc.encode("This is a test")
+```
+
 ## Dependencies
 
 - Tensor
