@@ -9,12 +9,11 @@ set(THIRD_PARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party)
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 add_subdirectory(googletest)
 
-add_executable(${PROJECT_NAME}
-        main.cpp
-        test.cpp
-        test_model.cpp
-        test_tokenizer.cpp
+file(GLOB test_src
+        "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
+
+add_executable(${PROJECT_NAME} ${test_src})
 
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../src
@@ -24,6 +23,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE
         googletest/googlemock/include
 )
 target_link_libraries(${PROJECT_NAME} TinyGPT_lib gtest_main)
+
+if (MSVC)
+    set_source_files_properties(${test_src} PROPERTIES COMPILE_FLAGS "/utf-8")
+endif ()
 
 include(GoogleTest)
 
