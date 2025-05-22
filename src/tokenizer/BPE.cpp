@@ -277,6 +277,7 @@ std::vector<std::string_view> BPE::bpeV2(std::string_view text) {
     }
   }
 
+  auto activeCount = nodes.size();
   while (!pq.empty()) {
     auto [minRank, node] = pq.top();
     pq.pop();
@@ -291,6 +292,7 @@ std::vector<std::string_view> BPE::bpeV2(std::string_view text) {
 
     // mark not active
     nextNode->active = false;
+    activeCount--;
 
     // merge with next
     node->next = nextNode->next;
@@ -316,6 +318,7 @@ std::vector<std::string_view> BPE::bpeV2(std::string_view text) {
   }
 
   std::vector<std::string_view> ret;
+  ret.reserve(activeCount - 1);
   for (Node* curr = &nodes[0]; curr; curr = curr->next) {
     if (curr->active && curr->next) {
       ret.emplace_back(text.data() + curr->pos, curr->next->pos - curr->pos);
