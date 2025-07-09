@@ -14,7 +14,8 @@ if (${TINYGPT_BUILD_PYBINDING})
     set(BUILD_SHARED_LIBS OFF)
 endif ()
 
-set(BUILD_TEST OFF)
+set(TINYTORCH_BUILD_DEMO OFF CACHE BOOL "" FORCE)
+set(TINYTORCH_BUILD_TEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(${THIRD_PARTY_DIR}/TinyTorch TinyTorch)
 
 #pcre2
@@ -33,11 +34,11 @@ file(GLOB TinyGPT_src
 )
 
 add_library(${PROJECT_NAME} STATIC ${TinyGPT_src})
-target_link_libraries(${PROJECT_NAME} TinyTorch pcre2-8)
+target_link_libraries(${PROJECT_NAME} TinyTorch_lib pcre2-8)
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${THIRD_PARTY_DIR}/pcre2/src
-        ${THIRD_PARTY_DIR}/TinyTorch
+        ${THIRD_PARTY_DIR}/TinyTorch/src
         ${THIRD_PARTY_DIR}
 )
 
@@ -57,7 +58,7 @@ if (${TINYGPT_BUILD_PYBINDING})
     pybind11_add_module(_tinygpt binding/pybind_tinygpt.cpp)
     target_include_directories(_tinygpt PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}
-            ${THIRD_PARTY_DIR}/TinyTorch
+            ${THIRD_PARTY_DIR}/TinyTorch/src
             ${THIRD_PARTY_DIR}
             pybind11/include
     )

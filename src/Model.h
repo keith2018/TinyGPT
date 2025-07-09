@@ -14,6 +14,8 @@
 
 namespace tinygpt {
 
+using Tensor = tinytorch::Tensor;
+
 struct Conv1D {
   Tensor w;
   Tensor b;
@@ -70,14 +72,14 @@ class Model {
                                    KVCache& cache);
   static Tensor transformerBlock(const Tensor& x, const TransformerBlock& block, uint32_t head, KVCache& cache);
 
-  static Tensor gpt2(const std::vector<float>& inputs, const GPT2::Params& params, uint32_t head,
+  static Tensor gpt2(const std::vector<int64_t>& inputs, const GPT2::Params& params, uint32_t head,
                      std::vector<KVCache>& cache);
 
  public:
   static bool loadModelGPT2(GPT2& gpt2, const char* hparams, const char* modelDict);
 
-  static void generate(std::vector<float>& tokens, const GPT2::Params& params, uint32_t head, uint32_t maxTokens,
-                       const std::function<bool(float token)>& callback);
+  static void generate(std::vector<int64_t>& tokens, const GPT2::Params& params, uint32_t head, uint32_t maxTokens,
+                       const std::function<bool(int64_t token)>& callback);
 
  private:
   static void loadTensor(Tensor& ret, std::fstream& fin, const rapidjson::Value& json);
@@ -85,10 +87,10 @@ class Model {
   static void loadLayerNorm(LayerNorm& ret, std::fstream& fin, const rapidjson::Value& json);
   static void loadTransformerBlock(TransformerBlock& ret, std::fstream& fin, const rapidjson::Value& json);
 
-  static TinyTorch::Shape getShape(const rapidjson::Value& json);
+  static tinytorch::SizeVector getShape(const rapidjson::Value& json);
 
  private:
-  static TinyTorch::Device device_;
+  static tinytorch::Device device_;
 };
 
 }  // namespace tinygpt

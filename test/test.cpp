@@ -4,24 +4,9 @@
  *
  */
 
-#include "test.h"
+#include "gtest/gtest.h"
 
-namespace tinygpt {
-
-void checkFloatVectorNear(const std::vector<float>& v1, const std::vector<float>& v2) {
-  EXPECT_EQ(v1.size(), v2.size());
-  for (size_t i = 0; i < v1.size(); i++) {
-    EXPECT_FLOAT_NEAR(v1[i], v2[i]);
-  }
+int main(int argc, char *argv[]) {
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }
-
-std::vector<std::string> getStrings(const tokenizer::StringPieces& input) {
-  std::vector<std::string> result;
-  result.reserve(input.pieces.size());
-  for (const auto& r : input.pieces) {
-    result.emplace_back(input.backStr.substr(r.first, r.second - r.first));
-  }
-  return result;
-}
-
-}  // namespace tinygpt
