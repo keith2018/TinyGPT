@@ -23,22 +23,12 @@
 
 using namespace tinygpt;
 
-// int32_t -> float
-std::vector<float> int32ToFloat(const std::vector<int32_t>& input) {
-  std::vector<float> output;
+// int32_t -> int64_t
+std::vector<int64_t> int32ToInt64(const std::vector<int32_t>& input) {
+  std::vector<int64_t> output;
   output.reserve(input.size());
   for (int32_t v : input) {
-    output.push_back(static_cast<float>(v));
-  }
-  return output;
-}
-
-// float -> int32_t
-std::vector<int32_t> floatToInt32(const std::vector<float>& input) {
-  std::vector<int32_t> output;
-  output.reserve(input.size());
-  for (float v : input) {
-    output.push_back(static_cast<int32_t>(v));
+    output.push_back(v);
   }
   return output;
 }
@@ -76,13 +66,13 @@ void app_gpt2() {
       break;
     }
 
-    auto tokens = int32ToFloat(tokenizer.encode(inputStr));
+    auto tokens = int32ToInt64(tokenizer.encode(inputStr));
     auto maxTokens = MAX_GPT_TOKEN - tokens.size();
     bool skipHeadBlank = true;
 
     // generate answers
     std::printf("GPT:");
-    Model::generate(tokens, gpt2.params, gpt2.hparams.n_head, maxTokens, [&](float token) -> bool {
+    Model::generate(tokens, gpt2.params, gpt2.hparams.n_head, maxTokens, [&](int64_t token) -> bool {
       if (skipHeadBlank && token == TOKEN_END_LINE) {
         return false;
       }

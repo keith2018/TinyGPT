@@ -8,7 +8,7 @@
 
 #include <fstream>
 
-#include "TinyTorch/Logger.h"
+#include "Utils/Logger.h"
 #include "rapidjson/document.h"
 #include "rapidjson/error/en.h"
 

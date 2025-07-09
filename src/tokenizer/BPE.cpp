@@ -13,7 +13,7 @@
 
 namespace tinygpt::tokenizer {
 
-LRUCache::LRUCache(size_t capacity) : capacity_(capacity) { assert(capacity > 0); }
+LRUCache::LRUCache(size_t capacity) : capacity_(capacity) { ASSERT(capacity > 0); }
 
 std::optional<LRUCache::Value> LRUCache::get(const Key& key) const {
   const auto it = map_.find(key);

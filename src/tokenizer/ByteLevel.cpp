@@ -172,13 +172,13 @@ ByteLevel::ByteLevel(bool addPrefixSpace, bool useRegex) : addPrefixSpace_(addPr
     static const std::string PATTERN_GPT2 =
         R"('s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+)";
     matcher_ = std::make_unique<Regex>(PATTERN_GPT2);
-    assert(matcher_->valid());
+    ASSERT(matcher_->valid());
   }
 }
 
 StringPieces ByteLevel::preTokenize(const StringPieces& text) {
-  assert(!text.pieces.empty());
-  assert(!text.backStr.empty());
+  ASSERT(!text.pieces.empty());
+  ASSERT(!text.backStr.empty());
 
   if (!useRegex_) {
     auto& pieces = text.pieces;

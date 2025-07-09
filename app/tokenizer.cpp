@@ -8,7 +8,7 @@
 
 #include <fstream>
 
-#include "TinyTorch/Timer.h"
+#include "Utils/Timer.h"
 
 using namespace tinygpt;
 using Behavior = tokenizer::SplitDelimiterBehavior;
@@ -52,7 +52,7 @@ void app_tokenizer() {
     input.emplace_back(content);
   }
 
-  TinyTorch::Timer timer;
+  tinytorch::Timer timer;
   timer.start();
   auto ids = tokenizer.encodeBatch(input, numThread, false);
   timer.mark();

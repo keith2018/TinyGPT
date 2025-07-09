@@ -7,9 +7,6 @@ option(TINYGPT_BUILD_PYBINDING "Whether or not to build pybinding" OFF)
 option(TINYGPT_BUILD_DEMO "Whether or not to build demo" ON)
 option(TINYGPT_BUILD_TEST "Whether or not to build the tests" ON)
 
-if (${TINYGPT_BUILD_PYBINDING})
-    set(USE_BLAS OFF)  # TODO pybinding
-endif ()
 add_subdirectory(src)
 
 if (${TINYGPT_BUILD_PYBINDING})

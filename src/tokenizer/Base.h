@@ -6,12 +6,12 @@
 
 #pragma once
 
-#include <cassert>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "TinyTorch/Logger.h"
+#include "Utils/Logger.h"
+#include "Utils/Macros.h"
 #include "ankerl/unordered_dense.h"
 
 namespace tinygpt::tokenizer {

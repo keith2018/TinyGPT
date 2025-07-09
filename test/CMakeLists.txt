@@ -17,7 +17,7 @@ add_executable(${PROJECT_NAME} ${test_src})
 
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../src
-        ${THIRD_PARTY_DIR}/TinyTorch
+        ${THIRD_PARTY_DIR}/TinyTorch/src
         ${THIRD_PARTY_DIR}
         googletest/googletest/include
         googletest/googlemock/include

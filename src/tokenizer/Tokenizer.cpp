@@ -52,8 +52,8 @@ bool Tokenizer::initWithConfigHF(const std::string& tokenizerPath, const std::st
   eosTokenId_ = token2Id(config.eosToken.content);
   padTokenId_ = token2Id(config.padToken.content);
 
-  assert(addBosToken_ || bosTokenId_ >= 0);
-  assert(addEosToken_ || eosTokenId_ >= 0);
+  ASSERT(addBosToken_ || bosTokenId_ >= 0);
+  ASSERT(addEosToken_ || eosTokenId_ >= 0);
   return true;
 }
 
@@ -221,7 +221,7 @@ void Tokenizer::addTokens(const ankerl::unordered_dense::map<std::string, int32_
   }
   if (!addedPattern_.empty()) {
     addedMatcher_ = std::make_unique<Regex>("(" + addedPattern_ + ")");
-    assert(addedMatcher_->valid());
+    ASSERT(addedMatcher_->valid());
   }
 }
 
