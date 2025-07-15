@@ -52,14 +52,14 @@ bool Tokenizer::initWithConfigHF(const std::string& tokenizerPath, const std::st
   eosTokenId_ = token2Id(config.eosToken.content);
   padTokenId_ = token2Id(config.padToken.content);
 
-  ASSERT(addBosToken_ || bosTokenId_ >= 0);
-  ASSERT(addEosToken_ || eosTokenId_ >= 0);
+  ASSERT(!addBosToken_ || bosTokenId_ >= 0);
+  ASSERT(!addEosToken_ || eosTokenId_ >= 0);
   return true;
 }
 
-bool Tokenizer::initWithConfigGPT2(const std::string& encoderPath, const std::string& vocabPath) {
+bool Tokenizer::initWithConfigGPT2(const std::string& vocabPath, const std::string& mergesPath) {
   gpt2::ConfigGPT2 config;
-  if (!gpt2::load(config, encoderPath, vocabPath)) {
+  if (!gpt2::load(config, vocabPath, mergesPath)) {
     LOGE("load gpt2 config failed.");
     return false;
   }

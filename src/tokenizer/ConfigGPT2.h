@@ -15,6 +15,6 @@ struct ConfigGPT2 {
   ankerl::unordered_dense::map<StringPair, int32_t, StringPairHash> merges;
 };
 
-bool load(ConfigGPT2& cfg, const std::string& encoderPath, const std::string& vocabPath);
+bool load(ConfigGPT2& cfg, const std::string& vocabPath, const std::string& mergesPath);
 
 }  // namespace tinygpt::tokenizer::gpt2

@@ -31,7 +31,7 @@ class Tokenizer {
   ~Tokenizer();
 
   bool initWithConfigHF(const std::string& tokenizerPath, const std::string& cfgPath);
-  bool initWithConfigGPT2(const std::string& encoderPath, const std::string& vocabPath);
+  bool initWithConfigGPT2(const std::string& vocabPath, const std::string& mergesPath);
 
   int32_t token2Id(const std::string& token);
   std::string id2Token(int32_t id);
