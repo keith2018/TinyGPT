@@ -182,7 +182,7 @@ static std::unique_ptr<Config> parseConfigTemplateProcessing(const rapidjson::Va
   return c;
 }
 
-static std::unique_ptr<Config> parseConfig(const rapidjson::Value& j);
+static std::unique_ptr<Config> parseConfig(const rapidjson::Value& j, const std::string& defaultType = {});
 
 static std::unique_ptr<Config> parseConfigSequence(const rapidjson::Value& j) {  // NOLINT(misc-no-recursion)
   auto c = std::make_unique<ConfigSequence>();
@@ -199,9 +199,13 @@ static std::unique_ptr<Config> parseConfigSequence(const rapidjson::Value& j) { 
   return c;
 }
 
-static std::unique_ptr<Config> parseConfig(const rapidjson::Value& j) {  // NOLINT(misc-no-recursion)
+// NOLINTNEXTLINE(misc-no-recursion)
+static std::unique_ptr<Config> parseConfig(const rapidjson::Value& j, const std::string& defaultType) {
   if (j.IsNull()) return nullptr;
   std::string typeStr = getJsonValue(j, "type", std::string(""));
+  if (typeStr.empty()) {
+    typeStr = defaultType;
+  }
   ComponentType type = parseComponentType(typeStr);
   switch (type) {
     case ComponentType::SEQUENCE:
@@ -260,7 +264,7 @@ static bool loadTokenizer(ConfigHuggingface& cfg, const std::string& tokenizerPa
 
   // model
   if (j.HasMember("model")) {
-    cfg.model = parseConfig(j["model"]);
+    cfg.model = parseConfig(j["model"], "BPE");
   }
 
   // post_processor

@@ -14,10 +14,10 @@
 
 namespace tinygpt::tokenizer::gpt2 {
 
-static bool loadEncoder(ConfigGPT2& cfg, const std::string& encoderPath) {
-  std::ifstream in(encoderPath);
+static bool loadVocab(ConfigGPT2& cfg, const std::string& vocabPath) {
+  std::ifstream in(vocabPath);
   if (!in) {
-    LOGE("Cannot open file: %s", encoderPath.c_str());
+    LOGE("Cannot open file: %s", vocabPath.c_str());
     return false;
   }
   std::stringstream buffer;
@@ -26,12 +26,12 @@ static bool loadEncoder(ConfigGPT2& cfg, const std::string& encoderPath) {
 
   rapidjson::Document doc;
   if (doc.Parse(content.c_str()).HasParseError()) {
-    LOGE("Parse encoder error: %s", "JSON parse error");
+    LOGE("Parse vocab error: %s", "JSON parse error");
     return false;
   }
 
   if (!doc.IsObject() || doc.ObjectEmpty()) {
-    LOGE("Encoder file empty: %s", encoderPath.c_str());
+    LOGE("Vocab file empty: %s", vocabPath.c_str());
     return false;
   }
 
@@ -43,10 +43,10 @@ static bool loadEncoder(ConfigGPT2& cfg, const std::string& encoderPath) {
   return true;
 }
 
-static bool loadVocab(ConfigGPT2& cfg, const std::string& vocabPath) {
-  std::ifstream in(vocabPath);
+static bool loadMerges(ConfigGPT2& cfg, const std::string& mergesPath) {
+  std::ifstream in(mergesPath);
   if (!in) {
-    LOGE("Cannot open file: %s", vocabPath.c_str());
+    LOGE("Cannot open file: %s", mergesPath.c_str());
     return false;
   }
 
@@ -65,8 +65,8 @@ static bool loadVocab(ConfigGPT2& cfg, const std::string& vocabPath) {
   return true;
 }
 
-bool load(ConfigGPT2& cfg, const std::string& encoderPath, const std::string& vocabPath) {
-  return loadEncoder(cfg, encoderPath) && loadVocab(cfg, vocabPath);
+bool load(ConfigGPT2& cfg, const std::string& vocabPath, const std::string& mergesPath) {
+  return loadVocab(cfg, vocabPath) && loadMerges(cfg, mergesPath);
 }
 
 }  // namespace tinygpt::tokenizer::gpt2
