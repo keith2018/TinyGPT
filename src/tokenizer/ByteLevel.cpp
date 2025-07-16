@@ -64,7 +64,7 @@ const std::array<std::array<char, 2>, 256> ByteLevel::byteUtf8Table_ = [] {
 }();
 
 std::string ByteLevel::utf8ToBytes(std::string_view str) {
-  static std::unordered_map<std::string_view, uint8_t> utf8ToByte;
+  static ankerl::unordered_dense::map<std::string_view, uint8_t> utf8ToByte;
   static bool inited = false;
   if (!inited) {
     for (int16_t i = 0; i < 256; ++i) {
