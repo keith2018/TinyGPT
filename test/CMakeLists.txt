@@ -30,17 +30,6 @@ endif ()
 
 include(GoogleTest)
 
-if (${USE_BLAS})
-    # copy libopenblas.dll
-    if (MSVC)
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy
-                ${THIRD_PARTY_DIR}/TinyTorch/thirdparty/OpenBLAS/win64-64/bin/libopenblas.dll
-                $<TARGET_FILE_DIR:${PROJECT_NAME}>/libopenblas.dll
-        )
-    endif ()
-endif ()
-
 # copy assets
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E remove_directory $<TARGET_FILE_DIR:${PROJECT_NAME}>/assets

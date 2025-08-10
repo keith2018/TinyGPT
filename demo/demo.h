@@ -6,5 +6,5 @@
 
 #pragma once
 
-void app_tokenizer();
-void app_gpt2();
+void demo_tokenizer();
+void demo_gpt2();

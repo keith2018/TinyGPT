@@ -15,7 +15,7 @@ if (${TINYGPT_BUILD_PYBINDING})
 endif ()
 
 if (${TINYGPT_BUILD_DEMO})
-    add_subdirectory(app)
+    add_subdirectory(demo)
 endif ()
 
 if (${TINYGPT_BUILD_TEST})

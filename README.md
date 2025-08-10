@@ -1,13 +1,10 @@
 # TinyGPT
-TinyGPT is a minimal C++11 implementation of GPT-2 inference, built from scratch and mainly inspired by the [picoGPT](https://github.com/jaymody/picoGPT) project.
-
-For more details, check out the accompanying blog post: [Write a GPT from scratch (TinyGPT)](https://robot9.me/write-gpt-from-scratch/)
+TinyGPT is a minimal C++ implementation of GPT-2 inference. This project was built from scratch primarily for educational purposes.
 
 ## Features
 
 - Fast BPE tokenizer, inspired by [tiktoken](https://github.com/openai/tiktoken).
 - CPU and CUDA inference.
-- KV cache enabled.
 
 `tinygpt::tokenizer` is faster than both [HuggingFace Tokenizers](https://github.com/huggingface/tokenizers) and [OpenAI tiktoken](https://github.com/openai/tiktoken)，the encoding speed was measured using the [~/benches/tokenizer.py](https://github.com/keith2018/TinyGPT/blob/main/benches/tokenizer.py) script on a machine with an Intel(R) Xeon(R) Platinum 8255C CPU @ 2.50GHz.
 
@@ -21,12 +18,16 @@ For more details, check out the accompanying blog post: [Write a GPT from scratc
 git clone --recurse-submodules https://github.com/keith2018/TinyGPT.git
 ```
 
-### 2. Download GPT-2 model file
+### 2. Download GPT-2 model files
     
-```python
-python3 tools/download_gpt2_model.py
+```bash
+git clone https://huggingface.co/openai-community/gpt2
 ```
-if success, you'll see the file `model_file.data` in directory `assets/gpt2`
+if success, chang the path in file [`./demo/demo_gpt2.cpp`](https://github.com/keith2018/TinyGPT/blob/main/demo/demo_gpt2.cpp)
+
+```cpp
+const std::string GPT2_MODEL_DIR = "path to gpt2 model files";
+```
 
 ### 3. Build and Run
 
@@ -36,16 +37,11 @@ cmake -B ./build -DCMAKE_BUILD_TYPE=Release
 cmake --build ./build --config Release
 ```
 
-This will generate the executable file and copy assets to directory `app/bin`, then you can run the demo:
+This will generate the executable file and copy assets to directory `demo/bin`, then you can run the demo:
 
 ```bash
-cd app/bin
+cd demo/bin
 ./TinyGPT_demo
-[DEBUG] TIMER TinyGPT::Model::loadModelGPT2: cost: 800 ms
-[DEBUG] TIMER TinyGPT::Encoder::getEncoder: cost: 191 ms
-INPUT:Alan Turing theorized that computers would one day become
-GPT:the most powerful machines on the planet.
-INPUT:exit
 ```
 
 ## Python binding

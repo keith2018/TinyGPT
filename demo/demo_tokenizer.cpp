@@ -4,11 +4,10 @@
  *
  */
 
-#include "tokenizer/Tokenizer.h"
-
 #include <fstream>
 
 #include "Utils/Timer.h"
+#include "tokenizer/Tokenizer.h"
 
 using namespace tinygpt;
 using Behavior = tokenizer::SplitDelimiterBehavior;
@@ -17,8 +16,8 @@ constexpr char const* TEXT_PATH = "assets/text/shakespeare.txt";
 constexpr char const* TOKENIZER_PATH = "assets/Llama-3.1-8B/tokenizer.json";
 constexpr char const* TOKENIZER_CONFIG_PATH = "assets/Llama-3.1-8B/tokenizer_config.json";
 
-void app_tokenizer() {
-  LOGI("app_tokenizer()");
+void demo_tokenizer() {
+  LOGI("demo_tokenizer()");
 
   std::ifstream file(TEXT_PATH, std::ios::in | std::ios::binary | std::ios::ate);
   if (!file) {

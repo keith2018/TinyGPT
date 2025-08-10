@@ -4,10 +4,10 @@
  *
  */
 
-#include "app.h"
+#include "demo.h"
 
 int main(int argc, char **argv) {
-  app_tokenizer();
-  app_gpt2();
+  demo_tokenizer();
+  demo_gpt2();
   return 0;
 }
