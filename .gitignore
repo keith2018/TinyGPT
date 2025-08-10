@@ -4,7 +4,7 @@
 .venv
 .vscode
 __pycache__/
-/app/bin
+/demo/bin
 /bin
 out
 build
@@ -13,3 +13,4 @@ CMakeSettings.json
 Testing
 
 assets/gpt2/model_file.data
+assets/gpt2/*.safetensors

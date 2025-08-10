@@ -31,6 +31,7 @@ add_subdirectory(${THIRD_PARTY_DIR}/pcre2 pcre2)
 file(GLOB TinyGPT_src
         "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tokenizer/*.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/models/*.cpp"
 )
 
 add_library(${PROJECT_NAME} STATIC ${TinyGPT_src})
