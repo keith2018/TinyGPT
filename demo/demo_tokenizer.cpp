@@ -12,9 +12,9 @@
 using namespace tinygpt;
 using Behavior = tokenizer::SplitDelimiterBehavior;
 
-constexpr char const* TEXT_PATH = "assets/text/shakespeare.txt";
-constexpr char const* TOKENIZER_PATH = "assets/Llama-3.1-8B/tokenizer.json";
-constexpr char const* TOKENIZER_CONFIG_PATH = "assets/Llama-3.1-8B/tokenizer_config.json";
+constexpr char const* TEXT_PATH = "assets/tokenizer/text/shakespeare.txt";
+constexpr char const* TOKENIZER_PATH = "assets/tokenizer/Llama-3.1-8B/tokenizer.json";
+constexpr char const* TOKENIZER_CONFIG_PATH = "assets/tokenizer/Llama-3.1-8B/tokenizer_config.json";
 
 void demo_tokenizer() {
   LOGI("demo_tokenizer()");
