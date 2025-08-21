@@ -1,14 +1,26 @@
 # TinyGPT
-TinyGPT is a minimal C++ implementation of GPT-2 inference. This project was built from scratch primarily for educational purposes.
+Tiny C++ LLM inference implementation from scratch.
+
+- [x] GPT-2
+- [x] Llama3.2 1B/3B
 
 ## Features
 
-- Fast BPE tokenizer, inspired by [tiktoken](https://github.com/openai/tiktoken).
-- CPU and CUDA inference.
+- [x] Fast BPE tokenizer, inspired by [tiktoken](https://github.com/openai/tiktoken).
+- [x] CPU/CUDA inference.
+- [x] FP32/FP16/BF16 inference.
 
 `tinygpt::tokenizer` is faster than both [HuggingFace Tokenizers](https://github.com/huggingface/tokenizers) and [OpenAI tiktoken](https://github.com/openai/tiktoken)，the encoding speed was measured using the [~/benches/tokenizer.py](https://github.com/keith2018/TinyGPT/blob/main/benches/tokenizer.py) script on a machine with an Intel(R) Xeon(R) Platinum 8255C CPU @ 2.50GHz.
 
 ![](docs/bench.png)
+
+## TODO
+
+- [ ] KV Cache
+- [ ] Paged Attention
+- [ ] Continuous Batching
+- [ ] CUDA Graph
+- [ ] Kernel Fusion
 
 ## Build and Run
 
@@ -23,7 +35,7 @@ git clone --recurse-submodules https://github.com/keith2018/TinyGPT.git
 ```bash
 git clone https://huggingface.co/openai-community/gpt2
 ```
-if success, chang the path in file [`./demo/demo_gpt2.cpp`](https://github.com/keith2018/TinyGPT/blob/main/demo/demo_gpt2.cpp)
+if success, set the path in file [`./demo/demo_gpt2.cpp`](https://github.com/keith2018/TinyGPT/blob/main/demo/demo_gpt2.cpp)
 
 ```cpp
 const std::string GPT2_MODEL_DIR = "path to gpt2 model files";
