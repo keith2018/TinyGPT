@@ -8,11 +8,11 @@
 
 #include "Functions.h"
 
+namespace tt = tinytorch;
+
 namespace tinygpt {
 
-using namespace tinytorch;
-
-Tensor Sampler::sample(const Tensor& logits) {
+tt::Tensor Sampler::sample(const tt::Tensor& logits) {
   ASSERT(logits.dim() == 2);  // [batch, vocab_size]
 
   bool setTemperature = config_.temperature && config_.temperature != 1.f;
@@ -21,10 +21,10 @@ Tensor Sampler::sample(const Tensor& logits) {
 
   if (!setTemperature && !setTopK && !setTopP) {
     // greedy
-    return function::argmax(logits, -1, true);
+    return tt::function::argmax(logits, -1, true);
   }
 
-  Tensor l = logits;
+  tt::Tensor l = logits;
 
   // temperature
   if (setTemperature) {
@@ -34,7 +34,7 @@ Tensor Sampler::sample(const Tensor& logits) {
   // top k
   if (setTopK) {
     auto topK = std::min(*config_.topK, logits.size(-1));
-    auto [topkLogits, topkIndices] = function::topk(l, topK, -1);
+    auto [topkLogits, topkIndices] = tt::function::topk(l, topK, -1);
 
     l.fill_(-std::numeric_limits<float>::infinity());
     l.scatter_(-1, topkIndices, topkLogits);
@@ -42,14 +42,14 @@ Tensor Sampler::sample(const Tensor& logits) {
 
   // top p
   if (setTopP) {
-    auto [sortedLogits, sortedIndices] = function::sort(l, -1, true);
-    auto probs = function::softmax(sortedLogits, -1);
-    auto cumulativeProbs = function::cumsum(probs, -1);
+    auto [sortedLogits, sortedIndices] = tt::function::sort(l, -1, true);
+    auto probs = tt::function::softmax(sortedLogits, -1);
+    auto cumulativeProbs = tt::function::cumsum(probs, -1);
     auto sortedMask = cumulativeProbs <= *config_.topP;
 
-    auto firstIndices = Tensor::zeros({sortedMask.size(0), 1}, sortedMask.options().indices());
-    auto firstMask = function::scatter(Tensor::zerosLike(sortedMask, sortedMask.options()), -1, firstIndices,
-                                       Tensor::fullLike(firstIndices, true, sortedMask.options()));
+    auto firstIndices = tt::Tensor::zeros({sortedMask.size(0), 1}, sortedMask.options().indices());
+    auto firstMask = tt::function::scatter(tt::Tensor::zerosLike(sortedMask, sortedMask.options()), -1, firstIndices,
+                                           tt::Tensor::fullLike(firstIndices, true, sortedMask.options()));
     sortedMask = sortedMask | firstMask;
 
     // TODO sortedMask.indexPut_({Slice(), 0}, true);
@@ -61,8 +61,8 @@ Tensor Sampler::sample(const Tensor& logits) {
   }
 
   // multinomial
-  auto probs = function::softmax(l, -1);
-  return function::multinomial(probs, 1);
+  auto probs = tt::function::softmax(l, -1);
+  return tt::function::multinomial(probs, 1);
 }
 
 }  // namespace tinygpt

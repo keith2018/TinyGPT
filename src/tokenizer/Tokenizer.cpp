@@ -259,9 +259,12 @@ std::vector<int32_t> Tokenizer::encodeWithModel(const std::string& text, bool ad
 void Tokenizer::workerThread() {
   while (!stop_) {
     std::function<void()> task;
-    if (tasks_.try_dequeue(task)) {
+    bool gotTask = false;
+    while (tasks_.try_dequeue(task)) {
+      gotTask = true;
       task();
-    } else {
+    }
+    if (!gotTask) {
       std::unique_lock<std::mutex> lock(mutex_);
       cv_.wait(lock, [this] { return stop_ || tasks_.size_approx() > 0; });
     }
@@ -299,12 +302,14 @@ void Tokenizer::parallelFor(const std::vector<Input>& inputs, std::vector<Output
   for (size_t i = 0; i < inputs.size(); i++) {
     auto task = [&, i]() {
       outputs[i] = func(inputs[i]);
-      if (++finished == inputs.size()) {
+      {
         std::lock_guard<std::mutex> lock(finishedMutex);
-        finishedCv.notify_one();
+        if (++finished == inputs.size()) {
+          finishedCv.notify_one();
+        }
       }
     };
-    fs.emplace_back(task);
+    fs.emplace_back(std::move(task));
   }
   tasks_.enqueue_bulk(fs.begin(), fs.size());
   cv_.notify_all();

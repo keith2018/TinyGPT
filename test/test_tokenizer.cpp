@@ -81,8 +81,8 @@ TEST(TEST_tokenizer, pretokenize_bytelevel) {
 
 TEST(TEST_tokenizer, tokenizer_llama_31_8b) {
   tokenizer::Tokenizer tokenizer;
-  bool initOk =
-      tokenizer.initWithConfigHF("assets/Llama-3.1-8B/tokenizer.json", "assets/Llama-3.1-8B/tokenizer_config.json");
+  bool initOk = tokenizer.initWithConfigHF("assets/tokenizer/Llama-3.1-8B/tokenizer.json",
+                                           "assets/tokenizer/Llama-3.1-8B/tokenizer_config.json");
   EXPECT_TRUE(initOk);
 
   std::map<std::string, std::vector<int32_t>> tokenPair = {
@@ -107,8 +107,8 @@ TEST(TEST_tokenizer, tokenizer_llama_31_8b) {
 
 TEST(TEST_tokenizer, tokenizer_ds_r1_8b) {
   tokenizer::Tokenizer tokenizer;
-  bool initOk = tokenizer.initWithConfigHF("assets/DeepSeek-R1-Distill-Llama-8B/tokenizer.json",
-                                           "assets/DeepSeek-R1-Distill-Llama-8B/tokenizer_config.json");
+  bool initOk = tokenizer.initWithConfigHF("assets/tokenizer/DeepSeek-R1-Distill-Llama-8B/tokenizer.json",
+                                           "assets/tokenizer/DeepSeek-R1-Distill-Llama-8B/tokenizer_config.json");
   EXPECT_TRUE(initOk);
 
   std::map<std::string, std::vector<int32_t>> tokenPair = {
@@ -133,7 +133,7 @@ TEST(TEST_tokenizer, tokenizer_ds_r1_8b) {
 
 TEST(TEST_tokenizer, tokenizer_gpt2) {
   tokenizer::Tokenizer tokenizer;
-  bool initOk = tokenizer.initWithConfigGPT2("assets/gpt2/encoder.json", "assets/gpt2/vocab.bpe");
+  bool initOk = tokenizer.initWithConfigGPT2("assets/tokenizer/gpt2/encoder.json", "assets/tokenizer/gpt2/vocab.bpe");
   EXPECT_TRUE(initOk);
 
   std::map<std::string, std::vector<int32_t>> tokenPair = {
@@ -155,8 +155,8 @@ TEST(TEST_tokenizer, tokenizer_gpt2) {
 
 TEST(TEST_tokenizer, tokenizer_batch) {
   tokenizer::Tokenizer tokenizer;
-  bool initOk = tokenizer.initWithConfigHF("assets/DeepSeek-R1-Distill-Llama-8B/tokenizer.json",
-                                           "assets/DeepSeek-R1-Distill-Llama-8B/tokenizer_config.json");
+  bool initOk = tokenizer.initWithConfigHF("assets/tokenizer/DeepSeek-R1-Distill-Llama-8B/tokenizer.json",
+                                           "assets/tokenizer/DeepSeek-R1-Distill-Llama-8B/tokenizer_config.json");
   EXPECT_TRUE(initOk);
 
   auto text = "hello world!";
@@ -172,8 +172,8 @@ TEST(TEST_tokenizer, tokenizer_batch) {
 
 TEST(TEST_tokenizer, tokenizer_long_text) {
   tokenizer::Tokenizer tokenizer;
-  bool initOk =
-      tokenizer.initWithConfigHF("assets/Llama-3.1-8B/tokenizer.json", "assets/Llama-3.1-8B/tokenizer_config.json");
+  bool initOk = tokenizer.initWithConfigHF("assets/tokenizer/Llama-3.1-8B/tokenizer.json",
+                                           "assets/tokenizer/Llama-3.1-8B/tokenizer_config.json");
   EXPECT_TRUE(initOk);
 
   std::string text(500000, 'a');
