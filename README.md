@@ -3,12 +3,14 @@ Tiny C++ LLM inference implementation from scratch.
 
 - [x] GPT-2
 - [x] Llama3.2 1B/3B
+- [ ] Qwen2.5
 
 ## Features
 
 - [x] Fast BPE tokenizer, inspired by [tiktoken](https://github.com/openai/tiktoken).
 - [x] CPU/CUDA inference.
 - [x] FP32/FP16/BF16 inference.
+- [x] KV Cache
 
 `tinygpt::tokenizer` is faster than both [HuggingFace Tokenizers](https://github.com/huggingface/tokenizers) and [OpenAI tiktoken](https://github.com/openai/tiktoken)，the encoding speed was measured using the [~/benches/tokenizer.py](https://github.com/keith2018/TinyGPT/blob/main/benches/tokenizer.py) script on a machine with an Intel(R) Xeon(R) Platinum 8255C CPU @ 2.50GHz.
 
@@ -16,7 +18,6 @@ Tiny C++ LLM inference implementation from scratch.
 
 ## TODO
 
-- [ ] KV Cache
 - [ ] Paged Attention
 - [ ] Continuous Batching
 - [ ] CUDA Graph
@@ -63,7 +64,7 @@ cd demo/bin
 
 import tinygpt
 enc = tinygpt.Tokenizer()
-enc.init_with_config_hf("tokenizer.json", "tokenizer_config.json")
+enc.init_with_config("tokenizer.json", "tokenizer_config.json")
 ids = enc.encode("This is a test")
 ```
 
