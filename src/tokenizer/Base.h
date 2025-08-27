@@ -13,6 +13,7 @@
 #include "Utils/Logger.h"
 #include "Utils/Macros.h"
 #include "ankerl/unordered_dense.h"
+#include "moodycamel/concurrentqueue.h"
 
 namespace tinygpt::tokenizer {
 

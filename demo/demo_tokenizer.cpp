@@ -35,7 +35,7 @@ void demo_tokenizer() {
   }
 
   tokenizer::Tokenizer tokenizer;
-  bool isOk = tokenizer.initWithConfigHF(TOKENIZER_PATH, TOKENIZER_CONFIG_PATH);
+  bool isOk = tokenizer.initWithConfig(TOKENIZER_PATH, TOKENIZER_CONFIG_PATH);
   LOGI("Tokenizer init ok: %s", isOk ? "true" : "false");
 
   auto batch = 8;

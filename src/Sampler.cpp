@@ -12,14 +12,17 @@ namespace tt = tinytorch;
 
 namespace tinygpt {
 
+Sampler::Sampler(const SamplerConfig& config)
+    : config_(config),
+      setTemperature_(config_.temperature != 1.f),
+      setTopK_(config_.topK > 0),
+      setTopP_(config_.topP > 0.f),
+      doSample_(setTemperature_ || setTopK_ || setTopP_) {}
+
 tt::Tensor Sampler::sample(const tt::Tensor& logits) {
   ASSERT(logits.dim() == 2);  // [batch, vocab_size]
 
-  bool setTemperature = config_.temperature && config_.temperature != 1.f;
-  bool setTopK = config_.topK && config_.topK > 0;
-  bool setTopP = config_.topP && config_.topP > 0.f;
-
-  if (!setTemperature && !setTopK && !setTopP) {
+  if (!doSample_) {
     // greedy
     return tt::function::argmax(logits, -1, true);
   }
@@ -27,13 +30,13 @@ tt::Tensor Sampler::sample(const tt::Tensor& logits) {
   tt::Tensor l = logits;
 
   // temperature
-  if (setTemperature) {
-    l = l / *config_.temperature;
+  if (setTemperature_) {
+    l = l / config_.temperature;
   }
 
   // top k
-  if (setTopK) {
-    auto topK = std::min(*config_.topK, logits.size(-1));
+  if (setTopK_) {
+    auto topK = std::min(config_.topK, logits.size(-1));
     auto [topkLogits, topkIndices] = tt::function::topk(l, topK, -1);
 
     l.fill_(-std::numeric_limits<float>::infinity());
@@ -41,11 +44,11 @@ tt::Tensor Sampler::sample(const tt::Tensor& logits) {
   }
 
   // top p
-  if (setTopP) {
+  if (setTopP_) {
     auto [sortedLogits, sortedIndices] = tt::function::sort(l, -1, true);
     auto probs = tt::function::softmax(sortedLogits, -1);
     auto cumulativeProbs = tt::function::cumsum(probs, -1);
-    auto sortedMask = cumulativeProbs <= *config_.topP;
+    auto sortedMask = cumulativeProbs <= config_.topP;
 
     auto firstIndices = tt::Tensor::zeros({sortedMask.size(0), 1}, sortedMask.options().indices());
     auto firstMask = tt::function::scatter(tt::Tensor::zerosLike(sortedMask, sortedMask.options()), -1, firstIndices,

@@ -6,6 +6,7 @@
 
 #include "GPTEngine.h"
 #include "Utils/Timer.h"
+#include "util/StringUtils.h"
 
 // clone from https://huggingface.co/openai-community/gpt2
 const std::string GPT2_MODEL_DIR = "path to gpt2 model files";
@@ -15,15 +16,8 @@ void demo_gpt2() {
   LOGI("demo_gpt2()");
 
   tinygpt::GPTConfig config;
-  config.modelType = tinygpt::GPTModelType::GPT2;
-  config.modelFilePath = GPT2_MODEL_DIR + "/model.safetensors";
-  config.tokenizerPath = GPT2_MODEL_DIR + "/tokenizer.json";
-  config.tokenizerConfigPath = GPT2_MODEL_DIR + "/tokenizer_config.json";
+  config.modelDir = GPT2_MODEL_DIR;
   config.device = tinytorch::DeviceType::CUDA;
-  config.samplerConfig.temperature = 0.8f;
-  config.samplerConfig.topK = 10;
-  config.samplerConfig.topP = 0.8f;
-  config.maxNewTokens = 128;
 
   tinygpt::GPTEngine engine(config);
   bool success = engine.prepare();
@@ -36,7 +30,9 @@ void demo_gpt2() {
   timer.start();
 
   auto output = engine.generateSync(INPUT_STR);
-  LOGI("output: \n%s", output.text.c_str());
+
+  LOGI("Prompt:\t'%s'", INPUT_STR.c_str());
+  LOGI("Output:\t'%s'", tinygpt::StringUtils::repr(output.text).c_str());
 
   timer.mark();
   LOGI("Time cost: %lld ms, speed: %.2f token/s", timer.elapseMillis(),

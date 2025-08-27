@@ -73,7 +73,7 @@ def benchmark_batch(model: str, documents: list[str], num_threads: int, document
     tinygpt_enc = tinygpt.Tokenizer()
     tokenizer_path = hf_hub_download(MODEL_ID, "tokenizer.json")
     tokenizer_config_path = hf_hub_download(MODEL_ID, "tokenizer_config.json")
-    tinygpt_enc.init_with_config_hf(tokenizer_path, tokenizer_config_path)
+    tinygpt_enc.init_with_config(tokenizer_path, tokenizer_config_path)
     out3 = tinygpt_enc.encode("This is a test", allow_added_tokens=False)
 
     assert out == out2, "sanity check"

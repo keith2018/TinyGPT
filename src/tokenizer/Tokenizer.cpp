@@ -8,6 +8,8 @@
 
 #include <thread>
 
+#include "huggingface/TokenizerConfig.h"
+
 namespace tinygpt::tokenizer {
 
 Tokenizer::~Tokenizer() {
@@ -20,18 +22,19 @@ Tokenizer::~Tokenizer() {
   }
 }
 
-bool Tokenizer::initWithConfigHF(const std::string& tokenizerPath, const std::string& cfgPath) {
-  huggingface::ConfigHuggingface config;
-  if (!huggingface::load(config, tokenizerPath, cfgPath)) {
+bool Tokenizer::initWithConfig(const std::string& tokenizerPath, const std::string& cfgPath) {
+  namespace ht = huggingface::tokenizer;
+  ht::TokenizerConfig config;
+  if (!ht::load(config, tokenizerPath, cfgPath)) {
     LOGE("load huggingface config failed.");
     return false;
   }
 
-  normalizer_ = huggingface::createComponent(config.normalizer);
-  preTokenizer_ = huggingface::createComponent(config.preTokenizer);
-  model_ = huggingface::createComponent(config.model);
-  postProcessor_ = huggingface::createComponent(config.postProcessor);
-  decoder_ = huggingface::createComponent(config.decoder);
+  normalizer_ = ht::createComponent(config.normalizer);
+  preTokenizer_ = ht::createComponent(config.preTokenizer);
+  model_ = ht::createComponent(config.model);
+  postProcessor_ = ht::createComponent(config.postProcessor);
+  decoder_ = ht::createComponent(config.decoder);
 
   // add token
   ankerl::unordered_dense::map<std::string, int32_t> addedTokens;
@@ -54,22 +57,6 @@ bool Tokenizer::initWithConfigHF(const std::string& tokenizerPath, const std::st
 
   ASSERT(!addBosToken_ || bosTokenId_ >= 0);
   ASSERT(!addEosToken_ || eosTokenId_ >= 0);
-  return true;
-}
-
-bool Tokenizer::initWithConfigGPT2(const std::string& vocabPath, const std::string& mergesPath) {
-  gpt2::ConfigGPT2 config;
-  if (!gpt2::load(config, vocabPath, mergesPath)) {
-    LOGE("load gpt2 config failed.");
-    return false;
-  }
-
-  preTokenizer_ = std::make_unique<ByteLevel>(false, true);
-  model_ = std::make_unique<BPE>(config.vocab, config.merges, false);
-  decoder_ = std::make_unique<ByteLevel>();
-
-  addBosToken_ = false;
-  addEosToken_ = false;
   return true;
 }
 
@@ -130,12 +117,12 @@ std::vector<std::vector<int32_t>> Tokenizer::encodeBatch(const std::vector<std::
   return results;
 }
 
-std::string Tokenizer::decode(const std::vector<int32_t>& ids) {
+std::string Tokenizer::decode(const std::vector<int32_t>& ids, int64_t offset) {
   std::vector<std::string> pieces;
-  pieces.reserve(ids.size());
+  pieces.reserve(ids.size() - offset);
 
-  for (auto& id : ids) {
-    pieces.push_back(id2Token(id));
+  for (size_t idx = offset; idx < ids.size(); idx++) {
+    pieces.push_back(id2Token(ids[idx]));
   }
   return decoder_->decode(pieces);
 }
@@ -293,7 +280,7 @@ void Tokenizer::parallelFor(const std::vector<Input>& inputs, std::vector<Output
     }
   }
 
-  std::atomic<size_t> finished{0};
+  size_t finished = 0;
   std::mutex finishedMutex;
   std::condition_variable finishedCv;
 

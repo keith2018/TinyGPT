@@ -29,9 +29,10 @@ set(PCRE2_BUILD_PCRE2_8 ON CACHE BOOL "" FORCE)
 add_subdirectory(${THIRD_PARTY_DIR}/pcre2 pcre2)
 
 file(GLOB TinyGPT_src
-        "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/huggingface/*.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/model/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tokenizer/*.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/models/*.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
 
 add_library(${PROJECT_NAME} STATIC ${TinyGPT_src})

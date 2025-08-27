@@ -11,6 +11,7 @@
 
 #include "Utils/Logger.h"
 #include "Utils/MMapUtils.h"
+#include "util/PathUtils.h"
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
@@ -261,29 +262,10 @@ bool SafeTensors::loadMulti(tt::nn::Module& module, const std::string& indexPath
     shard2keys[shardFile].push_back(tensorName);
   }
 
-  auto getBaseDir = [](const std::string& path) -> std::string {
-    size_t pos = path.find_last_of("/\\");
-    if (pos != std::string::npos) {
-      return path.substr(0, pos);
-    }
-    return ".";
-  };
-
-  auto joinPath = [](const std::string& dir, const std::string& file) -> std::string {
-    if (dir.empty() || dir == ".") {
-      return file;
-    }
-    char lastChar = dir.back();
-    if (lastChar == '/' || lastChar == '\\') {
-      return dir + file;
-    }
-    return dir + "/" + file;
-  };
-
   bool success = true;
-  std::string baseDir = getBaseDir(indexPath);
+  std::string baseDir = PathUtils::getBaseDir(indexPath);
   for (const auto& [shardFile, keys] : shard2keys) {
-    std::string shardPath = joinPath(baseDir, shardFile);
+    std::string shardPath = PathUtils::joinPath(baseDir, shardFile);
 
     ankerl::unordered_dense::set<std::string> keySet(keys.begin(), keys.end());
     if (!loadInternal(module, shardPath, false, keySet)) {
