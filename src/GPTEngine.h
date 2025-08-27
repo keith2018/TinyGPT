@@ -6,26 +6,14 @@
 
 #pragma once
 
-#include "GPTModel.h"
-#include "Sampler.h"
-#include "tokenizer/Tokenizer.h"
+#include "huggingface/ModelLoader.h"
 
 namespace tinygpt {
 
 struct GPTConfig {
-  // model
-  GPTModelType modelType;
-  GPTModelSize modelSize;
-  std::string modelFilePath;  // safetensors format
-
-  // tokenizers
-  std::string tokenizerPath;  // huggingface format
-  std::string tokenizerConfigPath;
-
-  // inference
+  std::string modelDir;  // huggingface repo
   tinytorch::Device device = tinytorch::DeviceType::CUDA;
-  SamplerConfig samplerConfig;
-  int64_t maxNewTokens = 128;
+  int64_t maxNewTokens = 16;
 };
 
 struct GPTOutput {
@@ -35,16 +23,19 @@ struct GPTOutput {
 
 class GPTEngine {
  public:
-  explicit GPTEngine(const GPTConfig& config);
+  explicit GPTEngine(GPTConfig config);
 
   bool prepare();
-  GPTOutput generateSync(const std::string& text);
+  GPTOutput generateSync(const std::string& text) const;
 
  private:
+  tinytorch::Tensor genNextToken(const tinytorch::Tensor& tokens) const;
+
+  tinytorch::Tensor encodeTexts(const std::string& text) const;
+  GPTOutput decodeTokens(const tinytorch::Tensor& tokens, int64_t offset = 0) const;
+
   GPTConfig config_;
-  Sampler sampler_;
-  tokenizer::Tokenizer tokenizer_;
-  std::unique_ptr<GPTModel> model_;
+  huggingface::GPTContext context_;
 };
 
 }  // namespace tinygpt

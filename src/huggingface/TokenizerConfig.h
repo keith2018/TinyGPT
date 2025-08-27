@@ -10,11 +10,11 @@
 #include <string>
 #include <vector>
 
-#include "Base.h"
-#include "Split.h"
-#include "TemplateProcessing.h"
+#include "tokenizer/Base.h"
+#include "tokenizer/Split.h"
+#include "tokenizer/TemplateProcessing.h"
 
-namespace tinygpt::tokenizer::huggingface {
+namespace tinygpt::huggingface::tokenizer {
 
 struct ConfigAddedToken {
   int32_t id;
@@ -27,8 +27,8 @@ struct ConfigAddedToken {
 };
 
 struct Config {
-  ComponentType type;
   virtual ~Config() = default;
+  tinygpt::tokenizer::ComponentType type;
 };
 
 struct ConfigByteLevel : Config {
@@ -39,19 +39,19 @@ struct ConfigByteLevel : Config {
 
 struct ConfigSplit : Config {
   std::string pattern;
-  SplitDelimiterBehavior behavior;
+  tinygpt::tokenizer::SplitDelimiterBehavior behavior;
   bool invert;
 };
 
 struct ConfigBPE : Config {
   bool ignoreMerges;
   ankerl::unordered_dense::map<std::string, int32_t> vocab;
-  ankerl::unordered_dense::map<StringPair, int32_t, StringPairHash> merges;
+  ankerl::unordered_dense::map<tinygpt::tokenizer::StringPair, int32_t, tinygpt::tokenizer::StringPairHash> merges;
 };
 
 struct ConfigTemplateProcessing : Config {
-  std::vector<TemplateElement> single;
-  std::vector<TemplateElement> pair;
+  std::vector<tinygpt::tokenizer::TemplateElement> single;
+  std::vector<tinygpt::tokenizer::TemplateElement> pair;
   ankerl::unordered_dense::map<std::string, std::vector<int32_t>> specialTokens;
 };
 
@@ -59,7 +59,7 @@ struct ConfigSequence : Config {
   std::vector<std::unique_ptr<Config>> configs;
 };
 
-struct ConfigHuggingface {
+struct TokenizerConfig {
   // version
   std::string version;
 
@@ -97,8 +97,8 @@ struct ConfigHuggingface {
   std::string chatTemplate;
 };
 
-bool load(ConfigHuggingface& cfg, const std::string& tokenizerPath, const std::string& cfgPath);
+bool load(TokenizerConfig& cfg, const std::string& tokenizerPath, const std::string& cfgPath);
 
-std::unique_ptr<Component> createComponent(const std::unique_ptr<Config>& cfg);
+std::unique_ptr<tinygpt::tokenizer::Component> createComponent(const std::unique_ptr<Config>& cfg);
 
-}  // namespace tinygpt::tokenizer::huggingface
+}  // namespace tinygpt::huggingface::tokenizer

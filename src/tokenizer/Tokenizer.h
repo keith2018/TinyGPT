@@ -10,18 +10,15 @@
 #include <condition_variable>
 #include <functional>
 #include <mutex>
-#include <queue>
 #include <thread>
 #include <vector>
 
 #include "BPE.h"
 #include "Base.h"
 #include "ByteLevel.h"
-#include "ConfigGPT2.h"
-#include "ConfigHF.h"
 #include "Regex.h"
 #include "Split.h"
-#include "moodycamel/concurrentqueue.h"
+#include "TemplateProcessing.h"
 
 namespace tinygpt::tokenizer {
 
@@ -30,8 +27,7 @@ class Tokenizer {
   Tokenizer() = default;
   ~Tokenizer();
 
-  bool initWithConfigHF(const std::string& tokenizerPath, const std::string& cfgPath);
-  bool initWithConfigGPT2(const std::string& vocabPath, const std::string& mergesPath);
+  bool initWithConfig(const std::string& tokenizerPath, const std::string& cfgPath);
 
   int32_t token2Id(const std::string& token);
   std::string id2Token(int32_t id);
@@ -40,7 +36,7 @@ class Tokenizer {
   std::vector<std::vector<int32_t>> encodeBatch(const std::vector<std::string>& texts, uint32_t numThreads = 8,
                                                 bool allowAddedTokens = true);
 
-  std::string decode(const std::vector<int32_t>& ids);
+  std::string decode(const std::vector<int32_t>& ids, int64_t offset = 0);
   std::vector<std::string> decodeBatch(const std::vector<std::vector<int32_t>>& ids, uint32_t numThreads = 8);
 
   // check whether the utf-8 sequence is complete, if not, return it on the next call.

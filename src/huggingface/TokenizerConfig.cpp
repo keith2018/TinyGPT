@@ -4,38 +4,18 @@
  *
  */
 
-#include "ConfigHF.h"
+#include "TokenizerConfig.h"
 
 #include <fstream>
 
-#include "BPE.h"
-#include "ByteLevel.h"
-#include "rapidjson/document.h"
+#include "JsonHelper.h"
+#include "tokenizer/BPE.h"
+#include "tokenizer/ByteLevel.h"
 
-namespace tinygpt::tokenizer::huggingface {
+namespace tinygpt::huggingface::tokenizer {
 
-template <typename T>
-T getJsonValue(const rapidjson::Value& obj, const char* key, const T& defaultValue);
-
-// bool
-template <>
-bool getJsonValue(const rapidjson::Value& obj, const char* key, const bool& defaultValue) {
-  return obj.IsObject() && obj.HasMember(key) && obj[key].IsBool() ? obj[key].GetBool() : defaultValue;
-}
-
-// int32_t
-template <>
-int32_t getJsonValue(const rapidjson::Value& obj, const char* key, const int32_t& defaultValue) {
-  return obj.IsObject() && obj.HasMember(key) && obj[key].IsInt() ? obj[key].GetInt() : defaultValue;
-}
-
-// std::string
-template <>
-std::string getJsonValue(const rapidjson::Value& obj, const char* key, const std::string& defaultValue) {
-  return obj.IsObject() && obj.HasMember(key) && obj[key].IsString()
-             ? std::string(obj[key].GetString(), obj[key].GetStringLength())
-             : defaultValue;
-}
+using namespace tinygpt::tokenizer;
+using namespace tinygpt::json;
 
 static ComponentType parseComponentType(const std::string& s) {
   if (s == "Sequence") return ComponentType::SEQUENCE;
@@ -224,7 +204,7 @@ static std::unique_ptr<Config> parseConfig(const rapidjson::Value& j, const std:
   return nullptr;
 }
 
-static bool loadTokenizer(ConfigHuggingface& cfg, const std::string& tokenizerPath) {
+static bool loadTokenizer(TokenizerConfig& cfg, const std::string& tokenizerPath) {
   std::ifstream in(tokenizerPath);
   if (!in) {
     LOGE("Cannot open file: %s", tokenizerPath.c_str());
@@ -280,7 +260,7 @@ static bool loadTokenizer(ConfigHuggingface& cfg, const std::string& tokenizerPa
   return true;
 }
 
-static bool loadConfig(ConfigHuggingface& cfg, const std::string& cfgPath) {
+static bool loadConfig(TokenizerConfig& cfg, const std::string& cfgPath) {
   std::ifstream in(cfgPath);
   if (!in) {
     LOGE("Cannot open file: %s", cfgPath.c_str());
@@ -311,7 +291,7 @@ static bool loadConfig(ConfigHuggingface& cfg, const std::string& cfgPath) {
   return true;
 }
 
-bool load(ConfigHuggingface& cfg, const std::string& tokenizerPath, const std::string& cfgPath) {
+bool load(TokenizerConfig& cfg, const std::string& tokenizerPath, const std::string& cfgPath) {
   return loadTokenizer(cfg, tokenizerPath) && loadConfig(cfg, cfgPath);
 }
 
@@ -384,4 +364,4 @@ std::unique_ptr<Component> createComponent(const std::unique_ptr<Config>& cfg) {
   return nullptr;
 }
 
-}  // namespace tinygpt::tokenizer::huggingface
+}  // namespace tinygpt::huggingface::tokenizer
