@@ -40,10 +40,6 @@ void demo_tokenizer() {
 
   auto batch = 8;
   auto numThread = 4;
-#ifdef DEBUG
-  batch = 1;
-  numThread = 1;
-#endif
 
   std::vector<std::string> input;
   input.reserve(batch);
