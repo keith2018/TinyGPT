@@ -2,8 +2,8 @@
 Tiny C++ LLM inference implementation from scratch.
 
 - [x] GPT-2
-- [x] Llama3.2 1B/3B
-- [ ] Qwen2.5
+- [x] Llama3.2
+- [x] Qwen2.5
 
 ## Features
 
@@ -31,15 +31,19 @@ Tiny C++ LLM inference implementation from scratch.
 git clone --recurse-submodules https://github.com/keith2018/TinyGPT.git
 ```
 
-### 2. Download GPT-2 model files
+### 2. Download model files from huggingface
     
 ```bash
 git clone https://huggingface.co/openai-community/gpt2
+git clone https://huggingface.co/meta-llama/Llama-3.2-1B
+git clone https://huggingface.co/meta-llama/Llama-3.2-3B
+git clone https://huggingface.co/Qwen/Qwen2.5-0.5B
+git clone https://huggingface.co/Qwen/Qwen2.5-3B
 ```
-if success, set the path in file [`./demo/demo_gpt2.cpp`](https://github.com/keith2018/TinyGPT/blob/main/demo/demo_gpt2.cpp)
+if success, set the path in file [`./demo/demo_gpt.cpp`](https://github.com/keith2018/TinyGPT/blob/main/demo/demo_gpt2.cpp)
 
 ```cpp
-const std::string GPT2_MODEL_DIR = "path to gpt2 model files";
+const std::string MODEL_DIR = "path to model files (huggingface repo)";
 ```
 
 ### 3. Build and Run
