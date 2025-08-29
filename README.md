@@ -40,7 +40,7 @@ git clone https://huggingface.co/meta-llama/Llama-3.2-3B
 git clone https://huggingface.co/Qwen/Qwen2.5-0.5B
 git clone https://huggingface.co/Qwen/Qwen2.5-3B
 ```
-if success, set the path in file [`./demo/demo_gpt.cpp`](https://github.com/keith2018/TinyGPT/blob/main/demo/demo_gpt2.cpp)
+if success, set the path in file [`./demo/demo_gpt.cpp`](https://github.com/keith2018/TinyGPT/blob/main/demo/demo_gpt.cpp)
 
 ```cpp
 const std::string MODEL_DIR = "path to model files (huggingface repo)";
