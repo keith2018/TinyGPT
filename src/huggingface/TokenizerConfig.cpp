@@ -23,6 +23,7 @@ static ComponentType parseComponentType(const std::string& s) {
   if (s == "ByteLevel") return ComponentType::BYTE_LEVEL;
   if (s == "BPE") return ComponentType::BPE;
   if (s == "TemplateProcessing") return ComponentType::TEMPLATE_PROCESSING;
+  if (s == "NFC") return ComponentType::NFC;
   return ComponentType::UNKNOWN;
 }
 
@@ -198,6 +199,8 @@ static std::unique_ptr<Config> parseConfig(const rapidjson::Value& j, const std:
       return parseConfigBPE(j);
     case ComponentType::TEMPLATE_PROCESSING:
       return parseConfigTemplateProcessing(j);
+    case ComponentType::NFC:
+      return nullptr;  // skip
     default:
       LOGE("Component type not support: %s", typeStr.c_str());
   }

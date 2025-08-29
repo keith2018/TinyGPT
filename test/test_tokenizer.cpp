@@ -155,6 +155,32 @@ TEST(TEST_tokenizer, tokenizer_gpt2) {
   }
 }
 
+TEST(TEST_tokenizer, tokenizer_qwen2) {
+  tokenizer::Tokenizer tokenizer;
+  bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Qwen2.5-3B");
+  EXPECT_TRUE(initOk);
+
+  std::map<std::string, std::vector<int32_t>> tokenPair = {
+      {"hello, world!", {14990, 11, 1879, 0}},
+      {"hello world!   ", {14990, 1879, 0, 262}},
+      {"<｜User｜>Thanks for putting me into the right direction",
+       {27, 130957, 1474, 130957, 29, 12658, 369, 10687, 752, 1119, 279, 1290, 5106}},
+      {"hello，你好啊, thanks", {14990, 3837, 108386, 103924, 11, 9339}},
+      {" ありがとうございます。 Arigatoo gozaimasu", {220, 140052, 1773, 1644, 343, 266, 2624, 728, 89, 2640, 95277}},
+      {"你好😀🐶", {108386, 141334, 145549}},
+      {"   hello world!    ", {256, 23811, 1879, 0, 257}},
+      {"Aujourd'hui, j'ai bu un café très fort.",
+       {32, 9635, 76392, 87153, 11, 502, 33055, 1031, 650, 51950, 24901, 11845, 13}},
+  };
+
+  for (auto &[text, ids] : tokenPair) {
+    auto encodeRet = tokenizer.encode(text);
+    EXPECT_TRUE(encodeRet == ids);
+    auto decodeRet = tokenizer.decode(ids);
+    EXPECT_TRUE(decodeRet == text);
+  }
+}
+
 TEST(TEST_tokenizer, tokenizer_batch) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/DeepSeek-R1-Distill-Llama-8B");

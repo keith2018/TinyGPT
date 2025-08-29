@@ -24,6 +24,7 @@ enum class ComponentType {
   BYTE_LEVEL,
   BPE,
   TEMPLATE_PROCESSING,
+  NFC,
 };
 
 using Range = std::pair<uint32_t, uint32_t>;  // [begin, end]
