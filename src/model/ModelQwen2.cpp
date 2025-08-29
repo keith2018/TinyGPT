@@ -4,7 +4,7 @@
  *
  */
 
-#include "ModelLlama.h"
+#include "ModelQwen2.h"
 
 #include "Functions.h"
 #include "Modules.h"
@@ -15,20 +15,13 @@ namespace tt = tinytorch;
 
 namespace tinygpt {
 
-namespace llama {
+namespace qwen2 {
 
-using Config = huggingface::model::LlamaConfig;
+using Config = huggingface::model::Qwen2Config;
 
-static tt::RopeScalingConfig cvtRopeScaling(const Config &config) {
-  return {config.ropeScaling.factor, config.ropeScaling.highFreqFactor, config.ropeScaling.lowFreqFactor,
-          config.ropeScaling.originalMaxPositionEmbeddings};
-}
-
-static int64_t getContextSize(const Config &config) { return config.ropeScaling.originalMaxPositionEmbeddings; }
-
-class LlamaMLP : public tt::nn::Module {
+class Qwen2MLP : public tt::nn::Module {
  public:
-  explicit LlamaMLP(const Config &config, tt::Options options = {})
+  explicit Qwen2MLP(const Config &config, tt::Options options = {})
       : gate_proj(tt::nn::Linear(config.hiddenSize, config.intermediateSize, false, options)),
         up_proj(tt::nn::Linear(config.hiddenSize, config.intermediateSize, false, options)),
         down_proj(tt::nn::Linear(config.intermediateSize, config.hiddenSize, false, options)) {
@@ -51,9 +44,9 @@ class LlamaMLP : public tt::nn::Module {
   tt::nn::Linear down_proj;
 };
 
-class LlamaAttention : public tt::nn::Module {
+class Qwen2Attention : public tt::nn::Module {
  public:
-  LlamaAttention(KVCacheManager &kvCache, size_t layerIdx, int64_t dIn, int64_t dOut, int64_t numHeads,
+  Qwen2Attention(KVCacheManager &kvCache, size_t layerIdx, int64_t dIn, int64_t dOut, int64_t numHeads,
                  int64_t numKvGroups, tt::nn::RoPE &rope, tt::Options options = {})
       : kvCache_(kvCache),
         layerIdx_(layerIdx),
@@ -62,9 +55,9 @@ class LlamaAttention : public tt::nn::Module {
         headDim_(dOut / numHeads),
         numKvGroups_(numKvGroups),
         groupSize_(numHeads / numKvGroups),
-        k_proj(tt::nn::Linear(dIn, numKvGroups * headDim_, false, options)),
-        v_proj(tt::nn::Linear(dIn, numKvGroups * headDim_, false, options)),
-        q_proj(tt::nn::Linear(dIn, dOut, false, options)),
+        k_proj(tt::nn::Linear(dIn, numKvGroups * headDim_, true, options)),
+        v_proj(tt::nn::Linear(dIn, numKvGroups * headDim_, true, options)),
+        q_proj(tt::nn::Linear(dIn, dOut, true, options)),
         o_proj(tt::nn::Linear(dOut, dOut, false, options)),
         rope(rope) {
     ASSERT(dOut % numHeads == 0);
@@ -125,13 +118,13 @@ class LlamaAttention : public tt::nn::Module {
   tt::nn::RoPE &rope;
 };
 
-class LlamaDecoderLayer : public tt::nn::Module {
+class Qwen2DecoderLayer : public tt::nn::Module {
  public:
-  LlamaDecoderLayer(const Config &config, KVCacheManager &kvCache, size_t layerIdx, tt::nn::RoPE &rope,
+  Qwen2DecoderLayer(const Config &config, KVCacheManager &kvCache, size_t layerIdx, tt::nn::RoPE &rope,
                     tt::Options options = {})
-      : self_attn(LlamaAttention(kvCache, layerIdx, config.hiddenSize, config.hiddenSize, config.numAttentionHeads,
+      : self_attn(Qwen2Attention(kvCache, layerIdx, config.hiddenSize, config.hiddenSize, config.numAttentionHeads,
                                  config.numKeyValueHeads, rope, options)),
-        mlp(LlamaMLP(config, options)),
+        mlp(Qwen2MLP(config, options)),
         input_layernorm(tt::nn::RMSNorm({config.hiddenSize}, config.rmsNormEps, options)),
         post_attention_layernorm(tt::nn::RMSNorm({config.hiddenSize}, config.rmsNormEps, options)) {
     registerModules({
@@ -149,22 +142,22 @@ class LlamaDecoderLayer : public tt::nn::Module {
     return x;
   }
 
-  LlamaAttention self_attn;
-  LlamaMLP mlp;
+  Qwen2Attention self_attn;
+  Qwen2MLP mlp;
   tt::nn::RMSNorm input_layernorm;
   tt::nn::RMSNorm post_attention_layernorm;
 };
 
-class LlamaModel : public tt::nn::Module {
+class Qwen2Model : public tt::nn::Module {
  public:
-  explicit LlamaModel(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
+  explicit Qwen2Model(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
       : embed_tokens(tt::nn::Embedding(config.vocabSize, config.hiddenSize, options)),
         layers(tt::nn::ModuleList()),
         norm(tt::nn::RMSNorm({config.hiddenSize}, config.rmsNormEps, options)),
-        rope(config.hiddenSize / config.numAttentionHeads, getContextSize(config), config.ropeTheta,
-             cvtRopeScaling(config), options) {
+        rope(config.hiddenSize / config.numAttentionHeads, config.maxPositionEmbeddings, config.ropeTheta, std::nullopt,
+             options) {
     for (auto i = 0; i < config.numHiddenLayers; i++) {
-      layers.emplaceBack<LlamaDecoderLayer>(config, kvCache, i, rope, options);
+      layers.emplaceBack<Qwen2DecoderLayer>(config, kvCache, i, rope, options);
     }
     registerModules({
         {"embed_tokens", embed_tokens},
@@ -191,10 +184,10 @@ class LlamaModel : public tt::nn::Module {
   tt::nn::RoPE rope;
 };
 
-class LlamaForCausalLM : public tt::nn::Module {
+class Qwen2ForCausalLM : public tt::nn::Module {
  public:
-  LlamaForCausalLM(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
-      : model(LlamaModel(config, kvCache, options)),
+  Qwen2ForCausalLM(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
+      : model(Qwen2Model(config, kvCache, options)),
         out_head(tt::nn::Linear(config.hiddenSize, config.vocabSize, false, options)) {
     // shared weights
     out_head.weight() = model.embed_tokens.weight();
@@ -210,24 +203,24 @@ class LlamaForCausalLM : public tt::nn::Module {
     return logits;
   }
 
-  LlamaModel model;
+  Qwen2Model model;
   tt::nn::Linear out_head;
 };
 
-}  // namespace llama
+}  // namespace qwen2
 
-ModelLlama::ModelLlama(const huggingface::model::LlamaConfig &config, tt::Device device)
+ModelQwen2::ModelQwen2(const huggingface::model::Qwen2Config &config, tt::Device device)
     : config_(config),
-      model_(std::make_unique<llama::LlamaForCausalLM>(config_, kvCache_, tt::Options(device, config.torchDtype))) {
+      model_(std::make_unique<qwen2::Qwen2ForCausalLM>(config_, kvCache_, tt::Options(device, config.torchDtype))) {
   init();
 }
 
-ModelLlama::~ModelLlama() = default;
+ModelQwen2::~ModelQwen2() = default;
 
-bool ModelLlama::load(const std::string &path) { return SafeTensors::load(*model_, path, false); }
+bool ModelQwen2::load(const std::string &path) { return SafeTensors::load(*model_, path, false); }
 
-int64_t ModelLlama::numLayers() { return config_.numHiddenLayers; }
+int64_t ModelQwen2::numLayers() { return config_.numHiddenLayers; }
 
-tt::nn::Module &ModelLlama::model() { return *model_; }
+tt::nn::Module &ModelQwen2::model() { return *model_; }
 
 }  // namespace tinygpt

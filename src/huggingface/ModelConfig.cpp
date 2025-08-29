@@ -132,9 +132,9 @@ std::unique_ptr<GenerationConfig> loadGenerationConfig(const std::string& cfgPat
   cfg->bosTokenId = getJsonValue<int64_t>(doc, "bos_token_id", -1);
   cfg->eosTokenId = getJsonValue<int64_t>(doc, "eos_token_id", -1);
   cfg->doSample = getJsonValue<bool>(doc, "do_sample", false);
-  cfg->temperature = getJsonValue<float>(doc, "temperature", 1.f);
+  cfg->temperature = getJsonValue<float>(doc, "temperature", 0.f);
   cfg->topK = getJsonValue<int64_t>(doc, "top_k", 0);
-  cfg->topP = getJsonValue<float>(doc, "top_p", 0.f);
+  cfg->topP = getJsonValue<float>(doc, "top_p", 1.f);
 
   return cfg;
 }

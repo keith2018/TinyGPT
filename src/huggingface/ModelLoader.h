@@ -17,13 +17,12 @@ struct GPTContext {
   std::unique_ptr<model::ModelConfig> modelConfig;
   std::unique_ptr<model::GenerationConfig> generationConfig;
   std::unique_ptr<tokenizer::Tokenizer> tokenizer;
-  std::unique_ptr<Sampler> sampler;
   std::unique_ptr<GPTModel> model;
 };
 
 class ModelLoader {
  public:
-  bool load(const std::string &dir, tinytorch::Device device);
+  bool load(const std::string &dir, tinytorch::Device device, tinytorch::DType dtype);
 
   GPTContext &&getContext() { return std::move(context_); }
 

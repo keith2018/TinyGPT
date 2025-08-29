@@ -8,6 +8,7 @@
 
 #include "model/ModelGPT2.h"
 #include "model/ModelLlama.h"
+#include "model/ModelQwen2.h"
 #include "util/PathUtils.h"
 
 namespace tinygpt::huggingface {
@@ -19,7 +20,7 @@ constexpr const char* kTokenizerConfigPath = "tokenizer_config.json";
 constexpr const char* kModelPath = "model.safetensors";
 constexpr const char* kModelIndexPath = "model.safetensors.index.json";
 
-bool ModelLoader::load(const std::string& dir, tinytorch::Device device) {
+bool ModelLoader::load(const std::string& dir, tinytorch::Device device, tinytorch::DType dtype) {
   // model config
   context_.modelConfig = model::loadModelConfig(PathUtils::joinPath(dir, kModelConfigPath));
   if (!context_.modelConfig) {
@@ -43,17 +44,16 @@ bool ModelLoader::load(const std::string& dir, tinytorch::Device device) {
     return false;
   }
 
-  // sampler
-  context_.sampler = std::make_unique<Sampler>(SamplerConfig{
-      context_.generationConfig->temperature, context_.generationConfig->topK, context_.generationConfig->topP});
-
   // model
   if (context_.modelConfig->modelType == model::MODEL_TYPE_GPT2) {
     auto* config = dynamic_cast<model::GPT2Config*>(context_.modelConfig.get());
-    context_.model = std::make_unique<GPT2LMHeadModel>(*config, device);
+    context_.model = std::make_unique<ModelGPT2>(*config, device);
   } else if (context_.modelConfig->modelType == model::MODEL_TYPE_LLAMA) {
     auto* config = dynamic_cast<model::LlamaConfig*>(context_.modelConfig.get());
-    context_.model = std::make_unique<LlamaForCausalLM>(*config, device);
+    context_.model = std::make_unique<ModelLlama>(*config, device);
+  } else if (context_.modelConfig->modelType == model::MODEL_TYPE_QWEN2) {
+    auto* config = dynamic_cast<model::Qwen2Config*>(context_.modelConfig.get());
+    context_.model = std::make_unique<ModelQwen2>(*config, device);
   } else {
     LOGE("model type not support: %s", context_.modelConfig->modelType.c_str());
     return false;
@@ -71,6 +71,9 @@ bool ModelLoader::load(const std::string& dir, tinytorch::Device device) {
     return false;
   }
   LOGI("Load model done.");
+
+  // convert dtype
+  context_.model->model().to(dtype);
 
   // set model eval
   context_.model->model().eval();

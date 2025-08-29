@@ -14,6 +14,12 @@ enum class GPTModelType : int8_t {
   UNKNOWN = 0,
   GPT2 = 1,
   LLAMA = 2,
+  QWEN2 = 3,
+};
+
+struct KVCacheStates {
+  tinytorch::TensorPair kv;
+  int64_t pastLength;
 };
 
 class KVCacheManager {
@@ -22,7 +28,7 @@ class KVCacheManager {
 
   void reset() { cache_.clear(); }
 
-  tinytorch::TensorPair append(size_t layerIdx, const tinytorch::TensorPair &kv);
+  KVCacheStates append(size_t layerIdx, const tinytorch::TensorPair &kv);
 
   int64_t pastLength(size_t layerIdx) const;
 

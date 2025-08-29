@@ -29,9 +29,9 @@ class Conv1D : public tt::nn::Module {
   tt::Tensor forward(const tt::Tensor &input) override {
     tt::SizeVector outputSize(input.shape());
     outputSize.back() = bias_.size(0);
-    auto temp = input.view({-1, input.size(-1)}).matmul(weight_) + bias_;
-    temp = temp.view(outputSize);
-    return temp;
+    auto x = input.view({-1, input.size(-1)}).matmul(weight_) + bias_;
+    x = x.view(outputSize);
+    return x;
   }
 
   std::vector<std::pair<std::string, tt::TensorPtr>> namedParameters_() override {
@@ -42,11 +42,11 @@ class Conv1D : public tt::nn::Module {
   tt::Tensor bias_;
 };
 
-class GPT2MHA : public tt::nn::Module {
+class GPT2Attention : public tt::nn::Module {
  public:
-  GPT2MHA(const Config &config, KVCacheManager &kvCache, size_t layerIndex, tt::Options options = {})
+  GPT2Attention(const Config &config, KVCacheManager &kvCache, size_t layerIdx, tt::Options options = {})
       : kvCache_(kvCache),
-        layerIndex_(layerIndex),
+        layerIdx_(layerIdx),
         numHeads_(config.nHead),
         headDim_(config.nEmbd / config.nHead),
         c_attn(Conv1D(3 * config.nEmbd, config.nEmbd, options)),
@@ -68,10 +68,10 @@ class GPT2MHA : public tt::nn::Module {
     value = value.view({batchSize, seqLen, numHeads_, headDim_}).transpose(1, 2);
 
     // update kv cache
-    auto kv = kvCache_.append(layerIndex_, {key, value});
+    auto kvStates = kvCache_.append(layerIdx_, {key, value});
 
-    bool isCausal = (kvCache_.pastLength(layerIndex_) == 0);
-    auto attnOutput = tt::function::sdpAttention(query, kv.first, kv.second, isCausal);
+    bool isCausal = (kvStates.pastLength == 0);
+    auto attnOutput = tt::function::sdpAttention(query, kvStates.kv.first, kvStates.kv.second, isCausal);
 
     attnOutput = attnOutput.transpose(1, 2).view({batchSize, seqLen, channels});
     attnOutput = c_proj(attnOutput);
@@ -79,7 +79,7 @@ class GPT2MHA : public tt::nn::Module {
   }
 
   KVCacheManager &kvCache_;
-  size_t layerIndex_;
+  size_t layerIdx_;
 
   int64_t numHeads_;
   int64_t headDim_;
@@ -110,7 +110,7 @@ class GPT2Block : public tt::nn::Module {
  public:
   GPT2Block(const Config &config, KVCacheManager &kvCache, size_t layerIndex, tt::Options options = {})
       : ln_1(tt::nn::LayerNorm({config.nEmbd}, config.layerNormEpsilon, true, options)),
-        attn(GPT2MHA(config, kvCache, layerIndex, options)),
+        attn(GPT2Attention(config, kvCache, layerIndex, options)),
         ln_2(tt::nn::LayerNorm({config.nEmbd}, config.layerNormEpsilon, true, options)),
         mlp(GPT2MLP(config, options)) {
     registerModules({
@@ -122,14 +122,14 @@ class GPT2Block : public tt::nn::Module {
   }
 
   tt::Tensor forward(const tt::Tensor &input) override {
-    auto attnOutput = attn.forward(ln_1(input));
-    auto temp = input + attnOutput;
-    temp = temp + mlp(ln_2(temp));
-    return temp;
+    auto x = input;
+    x = x + attn(ln_1(x));
+    x = x + mlp(ln_2(x));
+    return x;
   }
 
   tt::nn::LayerNorm ln_1;
-  GPT2MHA attn;
+  GPT2Attention attn;
   tt::nn::LayerNorm ln_2;
   GPT2MLP mlp;
 };
@@ -156,17 +156,14 @@ class GPT2Model : public tt::nn::Module {
   tt::Tensor forward(const tt::Tensor &inputIds) override {
     auto seqLen = inputIds.size(1);
     int64_t pastLength = kvCache_.pastLength(0);
-
     auto pos = tt::Tensor::arange<int64_t>(pastLength, pastLength + seqLen, 1, inputIds.options()).unsqueeze(0);
 
-    auto hiddenStates = wte(inputIds) + wpe(pos);
-
+    auto x = wte(inputIds) + wpe(pos);
     for (auto &layer : h) {
-      hiddenStates = layer->forward(hiddenStates);
+      x = layer->forward(x);
     }
-
-    hiddenStates = ln_f(hiddenStates);
-    return hiddenStates;
+    x = ln_f(x);
+    return x;
   }
 
   KVCacheManager &kvCache_;
@@ -177,9 +174,9 @@ class GPT2Model : public tt::nn::Module {
   tt::nn::LayerNorm ln_f;
 };
 
-class GPT2HeadModel : public tt::nn::Module {
+class GPT2LMHeadModel : public tt::nn::Module {
  public:
-  explicit GPT2HeadModel(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
+  explicit GPT2LMHeadModel(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
       : kvCache_(kvCache),
         transformer(GPT2Model(config, kvCache, options)),
         out_head(tt::nn::Linear(config.nEmbd, config.vocabSize, false, options)) {
@@ -192,8 +189,8 @@ class GPT2HeadModel : public tt::nn::Module {
   }
 
   tinytorch::Tensor forward(const tt::Tensor &inputIds) override {
-    auto hiddenStates = transformer.forward(inputIds);
-    auto logits = out_head(hiddenStates);
+    auto x = transformer(inputIds);
+    auto logits = out_head(x);
     return logits;
   }
 
@@ -205,18 +202,18 @@ class GPT2HeadModel : public tt::nn::Module {
 
 }  // namespace gpt2
 
-GPT2LMHeadModel::GPT2LMHeadModel(const gpt2::Config &config, tt::Device device)
+ModelGPT2::ModelGPT2(const gpt2::Config &config, tt::Device device)
     : config_(config),
-      model_(std::make_unique<gpt2::GPT2HeadModel>(config_, kvCache_, tt::Options(device, config.torchDtype))) {
+      model_(std::make_unique<gpt2::GPT2LMHeadModel>(config_, kvCache_, tt::Options(device, config.torchDtype))) {
   init();
 }
 
-GPT2LMHeadModel::~GPT2LMHeadModel() = default;
+ModelGPT2::~ModelGPT2() = default;
 
-bool GPT2LMHeadModel::load(const std::string &path) { return SafeTensors::load(model_->transformer, path, false); }
+bool ModelGPT2::load(const std::string &path) { return SafeTensors::load(model_->transformer, path, false); }
 
-int64_t GPT2LMHeadModel::numLayers() { return config_.nLayer; }
+int64_t ModelGPT2::numLayers() { return config_.nLayer; }
 
-tt::nn::Module &GPT2LMHeadModel::model() { return *model_; }
+tt::nn::Module &ModelGPT2::model() { return *model_; }
 
 }  // namespace tinygpt

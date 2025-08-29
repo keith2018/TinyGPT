@@ -14,11 +14,11 @@ namespace tt = tinytorch;
 
 namespace tinygpt {
 
-GPTEngine::GPTEngine(GPTConfig config) : config_(std::move(config)) {}
+GPTEngine::GPTEngine(GPTConfig config) : config_(std::move(config)), sampler_(config.samplerConfig) {}
 
 bool GPTEngine::prepare() {
   huggingface::ModelLoader loader;
-  bool success = loader.load(config_.modelDir, config_.device);
+  bool success = loader.load(config_.modelDir, config_.device, config_.dtype);
   if (!success) {
     LOGE("Prepare failed");
     return false;
@@ -27,10 +27,10 @@ bool GPTEngine::prepare() {
   return true;
 }
 
-tt::Tensor GPTEngine::genNextToken(const tt::Tensor& tokens) const {
+tt::Tensor GPTEngine::genNextToken(const tt::Tensor& tokens) {
   auto logits = context_.model->forward(tokens);
   logits = tt::function::narrow(logits, 1, logits.size(1) - 1, 1).squeeze(1);
-  return context_.sampler->sample(logits);
+  return sampler_.sample(logits);
 }
 
 tt::Tensor GPTEngine::encodeTexts(const std::string& text) const {
@@ -45,7 +45,7 @@ GPTOutput GPTEngine::decodeTokens(const tt::Tensor& tokens, int64_t offset) cons
   return {outputIds, context_.tokenizer->decode(outputIds, offset)};
 }
 
-GPTOutput GPTEngine::generateSync(const std::string& text) const {
+GPTOutput GPTEngine::generateSync(const std::string& text) {
   tt::NoGradGuard guard;
 
   auto tokens = encodeTexts(text);
@@ -64,7 +64,7 @@ GPTOutput GPTEngine::generateSync(const std::string& text) const {
   }
 
   // decode
-  for (int i = 1; i < config_.maxNewTokens; i++) {
+  for (int i = 1; i <= config_.maxNewTokens; i++) {
     nextToken = genNextToken(nextToken);
     tokens = tt::function::concat({tokens, nextToken}, 1);
     if (nextToken.item<int64_t>() == eosId) {

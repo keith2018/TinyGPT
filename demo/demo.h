@@ -7,5 +7,4 @@
 #pragma once
 
 void demo_tokenizer();
-void demo_gpt2();
-void demo_llama32();
+void demo_gpt();

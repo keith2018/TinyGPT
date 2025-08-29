@@ -14,9 +14,9 @@ namespace tinygpt {
 
 Sampler::Sampler(const SamplerConfig& config)
     : config_(config),
-      setTemperature_(config_.temperature != 1.f),
+      setTemperature_(config_.temperature > 0.f),
       setTopK_(config_.topK > 0),
-      setTopP_(config_.topP > 0.f),
+      setTopP_(config_.topP < 1.f),
       doSample_(setTemperature_ || setTopK_ || setTopP_) {}
 
 tt::Tensor Sampler::sample(const tt::Tensor& logits) {
