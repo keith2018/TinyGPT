@@ -8,20 +8,20 @@
 #include "Utils/Timer.h"
 #include "util/StringUtils.h"
 
-// clone from https://huggingface.co/meta-llama/Llama-3.2-1B
-const std::string LLAMA32_MODEL_DIR_1B = "path to llama3.2-1B model files";
+// clone from huggingface
+const std::string MODEL_DIR = "path to model files (huggingface repo)";
+const std::string INPUT_STR = "The future of AI is";
 
-// clone from https://huggingface.co/meta-llama/Llama-3.2-3B
-const std::string LLAMA32_MODEL_DIR_3B = "path to llama3.2-3B model files";
-
-const std::string INPUT_STR = "llamas eat";
-
-void demo_llama32_impl(const std::string &modelDir) {
-  LOGI("demo_llama3(), dir: %s", modelDir.c_str());
+void demo_gpt_impl(const std::string &modelDir) {
+  LOGI("demo_gpt(), dir: %s", modelDir.c_str());
 
   tinygpt::GPTConfig config;
   config.modelDir = modelDir;
   config.device = tinytorch::DeviceType::CUDA;
+  config.dtype = tinytorch::DType::BFloat16;
+  config.samplerConfig.temperature = 0.8;
+  config.samplerConfig.topP = 0.9;
+  config.maxNewTokens = 32;
 
   tinygpt::GPTEngine engine(config);
   bool success = engine.prepare();
@@ -43,7 +43,4 @@ void demo_llama32_impl(const std::string &modelDir) {
        output.tokenIds.size() * 1000.0f / timer.elapseMillis());
 }
 
-void demo_llama32() {
-  demo_llama32_impl(LLAMA32_MODEL_DIR_1B);
-  demo_llama32_impl(LLAMA32_MODEL_DIR_3B);
-}
+void demo_gpt() { demo_gpt_impl(MODEL_DIR); }

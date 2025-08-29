@@ -11,10 +11,10 @@
 
 #include "Utils/Logger.h"
 #include "Utils/MMapUtils.h"
-#include "util/PathUtils.h"
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
+#include "util/PathUtils.h"
 
 namespace tinygpt {
 

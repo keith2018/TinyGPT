@@ -15,13 +15,13 @@ struct LlamaConfig;
 }  // namespace huggingface::model
 
 namespace llama {
-class LlamaHeadModel;
+class LlamaForCausalLM;
 }  // namespace llama
 
-class LlamaForCausalLM : public GPTModel {
+class ModelLlama : public GPTModel {
  public:
-  LlamaForCausalLM(const huggingface::model::LlamaConfig &config, tinytorch::Device device);
-  ~LlamaForCausalLM() override;
+  ModelLlama(const huggingface::model::LlamaConfig &config, tinytorch::Device device);
+  ~ModelLlama() override;
 
   GPTModelType type() override { return GPTModelType::LLAMA; }
 
@@ -31,7 +31,7 @@ class LlamaForCausalLM : public GPTModel {
 
  private:
   const huggingface::model::LlamaConfig &config_;
-  std::unique_ptr<llama::LlamaHeadModel> model_;
+  std::unique_ptr<llama::LlamaForCausalLM> model_;
 };
 
 }  // namespace tinygpt

@@ -15,13 +15,13 @@ struct GPT2Config;
 }  // namespace huggingface::model
 
 namespace gpt2 {
-class GPT2HeadModel;
+class GPT2LMHeadModel;
 }  // namespace gpt2
 
-class GPT2LMHeadModel : public GPTModel {
+class ModelGPT2 : public GPTModel {
  public:
-  GPT2LMHeadModel(const huggingface::model::GPT2Config &config, tinytorch::Device device);
-  ~GPT2LMHeadModel() override;
+  ModelGPT2(const huggingface::model::GPT2Config &config, tinytorch::Device device);
+  ~ModelGPT2() override;
 
   GPTModelType type() override { return GPTModelType::GPT2; }
 
@@ -31,7 +31,7 @@ class GPT2LMHeadModel : public GPTModel {
 
  private:
   const huggingface::model::GPT2Config &config_;
-  std::unique_ptr<gpt2::GPT2HeadModel> model_;
+  std::unique_ptr<gpt2::GPT2LMHeadModel> model_;
 };
 
 }  // namespace tinygpt

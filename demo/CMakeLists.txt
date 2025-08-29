@@ -9,9 +9,8 @@ endif ()
 set(THIRD_PARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../third_party)
 
 add_executable(${PROJECT_NAME}
-        demo_gpt2.cpp
-        demo_llama32.cpp
         demo_tokenizer.cpp
+        demo_gpt.cpp
         main.cpp
 )
 
