@@ -4,6 +4,7 @@ Tiny C++ LLM inference implementation from scratch.
 - [x] GPT-2
 - [x] Llama3.2
 - [x] Qwen2.5
+- [x] Mistral
 
 ## Features
 
@@ -39,6 +40,7 @@ git clone https://huggingface.co/meta-llama/Llama-3.2-1B
 git clone https://huggingface.co/meta-llama/Llama-3.2-3B
 git clone https://huggingface.co/Qwen/Qwen2.5-0.5B
 git clone https://huggingface.co/Qwen/Qwen2.5-3B
+git clone https://huggingface.co/mistralai/Mistral-7B-v0.3
 ```
 if success, set the path in file [`./demo/demo_gpt.cpp`](https://github.com/keith2018/TinyGPT/blob/main/demo/demo_gpt.cpp)
 
@@ -80,6 +82,8 @@ ids = enc.encode("This is a test")
   - `RapidJSON` [https://github.com/Tencent/rapidjson](https://github.com/Tencent/rapidjson)
 - Regex
   - `pcre2` [https://github.com/PCRE2Project/pcre2](https://github.com/PCRE2Project/pcre2)
+- Unicode
+  - `utf8proc` [https://github.com/JuliaStrings/utf8proc](https://github.com/JuliaStrings/utf8proc)
 - HashMap
   - `ankerl::unordered_dense` [https://github.com/martinus/unordered_dense](https://github.com/martinus/unordered_dense)
 - ConcurrentQueue
