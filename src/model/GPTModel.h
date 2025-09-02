@@ -15,6 +15,7 @@ enum class GPTModelType : int8_t {
   GPT2 = 1,
   LLAMA = 2,
   QWEN2 = 3,
+  MISTRAL = 4,
 };
 
 struct KVCacheStates {

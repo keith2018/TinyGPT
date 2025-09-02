@@ -14,7 +14,7 @@ namespace tinygpt {
 class PathUtils {
  public:
   static bool fileExists(const std::string& filename) {
-    std::ifstream file(filename);
+    std::ifstream file(filename, std::ios::binary);
     return file.good();
   }
 

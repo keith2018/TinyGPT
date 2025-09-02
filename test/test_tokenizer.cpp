@@ -181,6 +181,30 @@ TEST(TEST_tokenizer, tokenizer_qwen2) {
   }
 }
 
+TEST(TEST_tokenizer, tokenizer_mistral_7b) {
+  tokenizer::Tokenizer tokenizer;
+  bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Mistral-7B-v0.3");
+  EXPECT_TRUE(initOk);
+
+  std::map<std::string, std::vector<int32_t>> tokenPair = {
+      {"hello, world!", {1, 7080, 29477, 29493, 2294, 29576}},
+      {"hello world!   ", {1, 7080, 29477, 2294, 29576, 3055}},
+      {"hello，你好啊, thanks", {1, 7080, 29477, 29692, 30151, 30298, 32076, 29493, 8964}},
+      {" ありがとうございます。 Arigatoo gozaimasu",
+       {1,     1027,  30442, 30284, 30077, 30084, 30388, 31961, 998,  900,  921,  29900,
+        30009, 29894, 29712, 1778,  1094,  2595,  29477, 1344,  2934, 1089, 1061, 29486}},
+      {"你好😀🐶", {1, 29473, 30151, 30298, 31343, 1011, 930, 915, 953}},
+      {"   hello world!    ", {1, 3055, 7080, 29477, 2294, 29576, 1028}},
+  };
+
+  for (auto &[text, ids] : tokenPair) {
+    auto encodeRet = tokenizer.encode(text);
+    EXPECT_TRUE(encodeRet == ids);
+    auto decodeRet = tokenizer.decode(ids);
+    EXPECT_TRUE(decodeRet == (tokenizer.bosTokenStr() + " " + text));
+  }
+}
+
 TEST(TEST_tokenizer, tokenizer_batch) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/DeepSeek-R1-Distill-Llama-8B");

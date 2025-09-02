@@ -80,9 +80,6 @@ std::string Tokenizer::id2Token(int32_t id) {
 
 std::vector<int32_t> Tokenizer::encode(const std::string& text, bool allowAddedTokens) {
   std::vector<int32_t> ret;
-  if (addBosToken_) {
-    ret.push_back(bosTokenId_);
-  }
 
   if (!allowAddedTokens) {
     auto ids = encodeWithModel(text, false);
@@ -103,7 +100,12 @@ std::vector<int32_t> Tokenizer::encode(const std::string& text, bool allowAddedT
     }
   }
 
-  if (addEosToken_) {
+  ASSERT(!ret.empty());
+  if (addBosToken_ && ret.front() != bosTokenId_) {
+    ret.insert(ret.begin(), bosTokenId_);
+  }
+
+  if (addEosToken_ && ret.back() != eosTokenId_) {
     ret.push_back(eosTokenId_);
   }
   return ret;
@@ -124,7 +126,18 @@ std::string Tokenizer::decode(const std::vector<int32_t>& ids, int64_t offset) {
   for (size_t idx = offset; idx < ids.size(); idx++) {
     pieces.push_back(id2Token(ids[idx]));
   }
-  return decoder_->decode(pieces);
+  pieces = decoder_->decode(pieces);
+
+  std::string ret;
+  size_t len = 0;
+  for (auto& s : pieces) {
+    len += s.size();
+  }
+  ret.reserve(len);
+  for (auto& s : pieces) {
+    ret.append(s);
+  }
+  return ret;
 }
 
 std::vector<std::string> Tokenizer::decodeBatch(const std::vector<std::vector<int32_t>>& ids, uint32_t numThreads) {

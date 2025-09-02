@@ -59,6 +59,24 @@ struct ConfigSequence : Config {
   std::vector<std::unique_ptr<Config>> configs;
 };
 
+struct ConfigMetaspace : Config {
+  std::string replacement;
+  std::string prependScheme;
+  bool split;
+};
+
+struct ConfigReplace : Config {
+  std::string patternString;
+  std::string patternRegex;
+  std::string content;
+};
+
+struct ConfigStrip : Config {
+  std::string content;
+  int32_t start;
+  int32_t stop;
+};
+
 struct TokenizerConfig {
   // version
   std::string version;

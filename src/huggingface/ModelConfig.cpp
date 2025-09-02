@@ -30,7 +30,7 @@ static tinytorch::DType cvtDtype(const std::string& typeStr) {
 }
 
 static std::string readFileToString(const std::string& filePath) {
-  std::ifstream ifs(filePath);
+  std::ifstream ifs(filePath, std::ios::binary);
   if (!ifs.is_open()) {
     LOGE("Failed to open file: %s", filePath.c_str());
     return "";
@@ -89,10 +89,16 @@ std::unique_ptr<ModelConfig> loadModelConfig(const std::string& cfgPath) {
     config = std::move(cfg);
   } else if (modelType == MODEL_TYPE_QWEN2) {
     auto cfg = std::make_unique<Qwen2Config>();
-    cfg->ropeTheta = getJsonValue<float>(doc, "rope_theta", 1.f);
+    cfg->ropeTheta = getJsonValue<float>(doc, "rope_theta", 10000.f);
     cfg->slidingWindow = getJsonValue<int64_t>(doc, "sliding_window", -1);
-    cfg->useMRope = getJsonValue<bool>(doc, "use_mrope", false);
     cfg->useSlidingWindow = getJsonValue<bool>(doc, "use_sliding_window", false);
+    cfg->useMRope = getJsonValue<bool>(doc, "use_mrope", false);
+    config = std::move(cfg);
+  } else if (modelType == MODEL_TYPE_MISTRAL) {
+    auto cfg = std::make_unique<MistralConfig>();
+    cfg->ropeTheta = getJsonValue<float>(doc, "rope_theta", 10000.0f);
+    cfg->slidingWindow = getJsonValue<int64_t>(doc, "sliding_window", -1);
+    cfg->useSlidingWindow = cfg->slidingWindow > 0;
     config = std::move(cfg);
   } else {
     LOGE("Unsupported model_type: %s", modelType.c_str());
@@ -110,6 +116,7 @@ std::unique_ptr<ModelConfig> loadModelConfig(const std::string& cfgPath) {
   config->numHiddenLayers = getJsonValue<int64_t>(doc, "num_hidden_layers", -1);
   config->numKeyValueHeads = getJsonValue<int64_t>(doc, "num_key_value_heads", -1);
   config->rmsNormEps = getJsonValue<float>(doc, "rms_norm_eps", 1e-5f);
+  config->tieWordEmbeddings = getJsonValue<bool>(doc, "tie_word_embeddings", false);
   config->torchDtype = cvtDtype(getJsonValue<std::string>(doc, "torch_dtype", ""));
   config->vocabSize = getJsonValue<int64_t>(doc, "vocab_size", -1);
 

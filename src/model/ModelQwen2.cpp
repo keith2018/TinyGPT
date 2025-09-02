@@ -189,8 +189,10 @@ class Qwen2ForCausalLM : public tt::nn::Module {
   Qwen2ForCausalLM(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
       : model(Qwen2Model(config, kvCache, options)),
         out_head(tt::nn::Linear(config.hiddenSize, config.vocabSize, false, options)) {
-    // shared weights
-    out_head.weight() = model.embed_tokens.weight();
+    if (config.tieWordEmbeddings) {
+      // shared weights
+      out_head.weight() = model.embed_tokens.weight();
+    }
     registerModules({
         {"model", model},
         {"out_head", out_head},

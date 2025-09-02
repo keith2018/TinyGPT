@@ -4,7 +4,7 @@
  *
  */
 
-#include "ModelLlama.h"
+#include "ModelMistral.h"
 
 #include "Functions.h"
 #include "Modules.h"
@@ -15,20 +15,13 @@ namespace tt = tinytorch;
 
 namespace tinygpt {
 
-namespace llama {
+namespace mistral {
 
-using Config = huggingface::model::LlamaConfig;
+using Config = huggingface::model::MistralConfig;
 
-static tt::RopeScalingConfig cvtRopeScaling(const Config &config) {
-  return {config.ropeScaling.factor, config.ropeScaling.highFreqFactor, config.ropeScaling.lowFreqFactor,
-          config.ropeScaling.originalMaxPositionEmbeddings};
-}
-
-static int64_t getContextSize(const Config &config) { return config.ropeScaling.originalMaxPositionEmbeddings; }
-
-class LlamaMLP : public tt::nn::Module {
+class MistralMLP : public tt::nn::Module {
  public:
-  explicit LlamaMLP(const Config &config, tt::Options options = {})
+  explicit MistralMLP(const Config &config, tt::Options options = {})
       : gate_proj(tt::nn::Linear(config.hiddenSize, config.intermediateSize, false, options)),
         up_proj(tt::nn::Linear(config.hiddenSize, config.intermediateSize, false, options)),
         down_proj(tt::nn::Linear(config.intermediateSize, config.hiddenSize, false, options)) {
@@ -51,10 +44,10 @@ class LlamaMLP : public tt::nn::Module {
   tt::nn::Linear down_proj;
 };
 
-class LlamaAttention : public tt::nn::Module {
+class MistralAttention : public tt::nn::Module {
  public:
-  LlamaAttention(KVCacheManager &kvCache, size_t layerIdx, int64_t dIn, int64_t dOut, int64_t numHeads,
-                 int64_t numKvGroups, tt::nn::RoPE &rope, tt::Options options = {})
+  MistralAttention(KVCacheManager &kvCache, size_t layerIdx, int64_t dIn, int64_t dOut, int64_t numHeads,
+                   int64_t numKvGroups, tt::nn::RoPE &rope, tt::Options options = {})
       : kvCache_(kvCache),
         layerIdx_(layerIdx),
         dOut_(dOut),
@@ -125,13 +118,13 @@ class LlamaAttention : public tt::nn::Module {
   tt::nn::RoPE &rope;
 };
 
-class LlamaDecoderLayer : public tt::nn::Module {
+class MistralDecoderLayer : public tt::nn::Module {
  public:
-  LlamaDecoderLayer(const Config &config, KVCacheManager &kvCache, size_t layerIdx, tt::nn::RoPE &rope,
-                    tt::Options options = {})
-      : self_attn(LlamaAttention(kvCache, layerIdx, config.hiddenSize, config.hiddenSize, config.numAttentionHeads,
-                                 config.numKeyValueHeads, rope, options)),
-        mlp(LlamaMLP(config, options)),
+  MistralDecoderLayer(const Config &config, KVCacheManager &kvCache, size_t layerIdx, tt::nn::RoPE &rope,
+                      tt::Options options = {})
+      : self_attn(MistralAttention(kvCache, layerIdx, config.hiddenSize, config.hiddenSize, config.numAttentionHeads,
+                                   config.numKeyValueHeads, rope, options)),
+        mlp(MistralMLP(config, options)),
         input_layernorm(tt::nn::RMSNorm({config.hiddenSize}, config.rmsNormEps, options)),
         post_attention_layernorm(tt::nn::RMSNorm({config.hiddenSize}, config.rmsNormEps, options)) {
     registerModules({
@@ -149,22 +142,22 @@ class LlamaDecoderLayer : public tt::nn::Module {
     return x;
   }
 
-  LlamaAttention self_attn;
-  LlamaMLP mlp;
+  MistralAttention self_attn;
+  MistralMLP mlp;
   tt::nn::RMSNorm input_layernorm;
   tt::nn::RMSNorm post_attention_layernorm;
 };
 
-class LlamaModel : public tt::nn::Module {
+class MistralModel : public tt::nn::Module {
  public:
-  explicit LlamaModel(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
+  explicit MistralModel(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
       : embed_tokens(tt::nn::Embedding(config.vocabSize, config.hiddenSize, options)),
         layers(tt::nn::ModuleList()),
         norm(tt::nn::RMSNorm({config.hiddenSize}, config.rmsNormEps, options)),
-        rope(config.hiddenSize / config.numAttentionHeads, getContextSize(config), config.ropeTheta,
-             cvtRopeScaling(config), options) {
+        rope(config.hiddenSize / config.numAttentionHeads, config.maxPositionEmbeddings, config.ropeTheta, std::nullopt,
+             options) {
     for (auto i = 0; i < config.numHiddenLayers; i++) {
-      layers.emplaceBack<LlamaDecoderLayer>(config, kvCache, i, rope, options);
+      layers.emplaceBack<MistralDecoderLayer>(config, kvCache, i, rope, options);
     }
     registerModules({
         {"embed_tokens", embed_tokens},
@@ -191,45 +184,45 @@ class LlamaModel : public tt::nn::Module {
   tt::nn::RoPE rope;
 };
 
-class LlamaForCausalLM : public tt::nn::Module {
+class MistralForCausalLM : public tt::nn::Module {
  public:
-  LlamaForCausalLM(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
-      : model(LlamaModel(config, kvCache, options)),
-        out_head(tt::nn::Linear(config.hiddenSize, config.vocabSize, false, options)) {
+  MistralForCausalLM(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
+      : model(MistralModel(config, kvCache, options)),
+        lm_head(tt::nn::Linear(config.hiddenSize, config.vocabSize, false, options)) {
     if (config.tieWordEmbeddings) {
       // shared weights
-      out_head.weight() = model.embed_tokens.weight();
+      lm_head.weight() = model.embed_tokens.weight();
     }
     registerModules({
         {"model", model},
-        {"out_head", out_head},
+        {"lm_head", lm_head},
     });
   }
 
   tinytorch::Tensor forward(const tt::Tensor &inputIds) override {
     auto x = model(inputIds);
-    auto logits = out_head(x);
+    auto logits = lm_head(x);
     return logits;
   }
 
-  LlamaModel model;
-  tt::nn::Linear out_head;
+  MistralModel model;
+  tt::nn::Linear lm_head;
 };
 
-}  // namespace llama
+}  // namespace mistral
 
-ModelLlama::ModelLlama(const huggingface::model::LlamaConfig &config, tt::Device device)
+ModelMistral::ModelMistral(const huggingface::model::MistralConfig &config, tt::Device device)
     : config_(config),
-      model_(std::make_unique<llama::LlamaForCausalLM>(config_, kvCache_, tt::Options(device, config.torchDtype))) {
+      model_(std::make_unique<mistral::MistralForCausalLM>(config_, kvCache_, tt::Options(device, config.torchDtype))) {
   init();
 }
 
-ModelLlama::~ModelLlama() = default;
+ModelMistral::~ModelMistral() = default;
 
-bool ModelLlama::load(const std::string &path) { return SafeTensors::load(*model_, path, false); }
+bool ModelMistral::load(const std::string &path) { return SafeTensors::load(*model_, path, false); }
 
-int64_t ModelLlama::numLayers() { return config_.numHiddenLayers; }
+int64_t ModelMistral::numLayers() { return config_.numHiddenLayers; }
 
-tt::nn::Module &ModelLlama::model() { return *model_; }
+tt::nn::Module &ModelMistral::model() { return *model_; }
 
 }  // namespace tinygpt

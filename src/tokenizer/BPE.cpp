@@ -143,7 +143,18 @@ std::vector<int32_t> BPE::tokenize(const StringPieces& tokens) {
       if (it != encoder_.end()) {
         ids.push_back(it->second);
       } else {
-        LOGE("error encode token: %s", std::string(bpePiece).c_str());
+        // byte decode in format <0xXX>
+        for (const auto& c : bpePiece) {
+          char buf[8];
+          std::snprintf(buf, sizeof(buf), "<0x%02X>", static_cast<uint8_t>(c));
+          it = encoder_.find(buf);
+          if (it != encoder_.end()) {
+            ids.push_back(it->second);
+          } else {
+            LOGE("error encode token: %s", std::string(bpePiece).c_str());
+            ASSERT(false);
+          }
+        }
       }
     }
     ret.insert(ret.end(), ids.begin(), ids.end());
