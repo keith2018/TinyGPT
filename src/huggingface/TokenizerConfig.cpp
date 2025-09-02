@@ -10,7 +10,13 @@
 
 #include "JsonHelper.h"
 #include "tokenizer/BPE.h"
+#include "tokenizer/ByteFallback.h"
 #include "tokenizer/ByteLevel.h"
+#include "tokenizer/Fuse.h"
+#include "tokenizer/Metaspace.h"
+#include "tokenizer/Replace.h"
+#include "tokenizer/Strip.h"
+#include "tokenizer/UnicodeNorm.h"
 
 namespace tinygpt::huggingface::tokenizer {
 
@@ -18,12 +24,20 @@ using namespace tinygpt::tokenizer;
 using namespace tinygpt::json;
 
 static ComponentType parseComponentType(const std::string& s) {
+  if (s == "BPE") return ComponentType::BPE;
+  if (s == "ByteFallback") return ComponentType::BYTE_FALLBACK;
+  if (s == "ByteLevel") return ComponentType::BYTE_LEVEL;
+  if (s == "Fuse") return ComponentType::FUSE;
+  if (s == "Metaspace") return ComponentType::METASPACE;
+  if (s == "NFC") return ComponentType::NFC;
+  if (s == "NFD") return ComponentType::NFD;
+  if (s == "NFKC") return ComponentType::NFKC;
+  if (s == "NFKD") return ComponentType::NFKD;
+  if (s == "Replace") return ComponentType::REPLACE;
   if (s == "Sequence") return ComponentType::SEQUENCE;
   if (s == "Split") return ComponentType::SPLIT;
-  if (s == "ByteLevel") return ComponentType::BYTE_LEVEL;
-  if (s == "BPE") return ComponentType::BPE;
+  if (s == "Strip") return ComponentType::STRIP;
   if (s == "TemplateProcessing") return ComponentType::TEMPLATE_PROCESSING;
-  if (s == "NFC") return ComponentType::NFC;
   return ComponentType::UNKNOWN;
 }
 
@@ -163,6 +177,38 @@ static std::unique_ptr<Config> parseConfigTemplateProcessing(const rapidjson::Va
   return c;
 }
 
+static std::unique_ptr<Config> parseConfigMetaspace(const rapidjson::Value& j) {
+  auto c = std::make_unique<ConfigMetaspace>();
+  c->type = ComponentType::METASPACE;
+  c->replacement = getJsonValue(j, "replacement", std::string("\u2581"));
+  c->prependScheme = getJsonValue(j, "prepend_scheme", std::string("always"));
+  c->split = getJsonValue(j, "split", true);
+  return c;
+}
+
+static std::unique_ptr<Config> parseConfigReplace(const rapidjson::Value& j) {
+  auto c = std::make_unique<ConfigReplace>();
+  c->type = ComponentType::REPLACE;
+  const auto& pt = j["pattern"];
+  if (pt.HasMember("String")) {
+    c->patternString = getJsonValue(pt, "String", std::string(""));
+  }
+  if (pt.HasMember("Regex")) {
+    c->patternRegex = getJsonValue(pt, "Regex", std::string(""));
+  }
+  c->content = getJsonValue(j, "content", std::string(""));
+  return c;
+}
+
+static std::unique_ptr<Config> parseConfigStrip(const rapidjson::Value& j) {
+  auto c = std::make_unique<ConfigStrip>();
+  c->type = ComponentType::STRIP;
+  c->content = getJsonValue(j, "content", std::string(""));
+  c->start = getJsonValue(j, "start", 0);
+  c->stop = getJsonValue(j, "stop", 0);
+  return c;
+}
+
 static std::unique_ptr<Config> parseConfig(const rapidjson::Value& j, const std::string& defaultType = {});
 
 static std::unique_ptr<Config> parseConfigSequence(const rapidjson::Value& j) {  // NOLINT(misc-no-recursion)
@@ -180,6 +226,12 @@ static std::unique_ptr<Config> parseConfigSequence(const rapidjson::Value& j) { 
   return c;
 }
 
+static std::unique_ptr<Config> parseConfigNoParams(const ComponentType& type) {
+  auto c = std::make_unique<Config>();
+  c->type = type;
+  return c;
+}
+
 // NOLINTNEXTLINE(misc-no-recursion)
 static std::unique_ptr<Config> parseConfig(const rapidjson::Value& j, const std::string& defaultType) {
   if (j.IsNull()) return nullptr;
@@ -189,18 +241,29 @@ static std::unique_ptr<Config> parseConfig(const rapidjson::Value& j, const std:
   }
   ComponentType type = parseComponentType(typeStr);
   switch (type) {
+    case ComponentType::BPE:
+      return parseConfigBPE(j);
+    case ComponentType::BYTE_FALLBACK:
+    case ComponentType::FUSE:
+    case ComponentType::NFC:
+    case ComponentType::NFD:
+    case ComponentType::NFKC:
+    case ComponentType::NFKD:
+      return parseConfigNoParams(type);
+    case ComponentType::BYTE_LEVEL:
+      return parseConfigByteLevel(j);
+    case ComponentType::METASPACE:
+      return parseConfigMetaspace(j);
+    case ComponentType::REPLACE:
+      return parseConfigReplace(j);
     case ComponentType::SEQUENCE:
       return parseConfigSequence(j);
     case ComponentType::SPLIT:
       return parseConfigSplit(j);
-    case ComponentType::BYTE_LEVEL:
-      return parseConfigByteLevel(j);
-    case ComponentType::BPE:
-      return parseConfigBPE(j);
+    case ComponentType::STRIP:
+      return parseConfigStrip(j);
     case ComponentType::TEMPLATE_PROCESSING:
       return parseConfigTemplateProcessing(j);
-    case ComponentType::NFC:
-      return nullptr;  // skip
     default:
       LOGE("Component type not support: %s", typeStr.c_str());
   }
@@ -208,7 +271,7 @@ static std::unique_ptr<Config> parseConfig(const rapidjson::Value& j, const std:
 }
 
 static bool loadTokenizer(TokenizerConfig& cfg, const std::string& tokenizerPath) {
-  std::ifstream in(tokenizerPath);
+  std::ifstream in(tokenizerPath, std::ios::binary);
   if (!in) {
     LOGE("Cannot open file: %s", tokenizerPath.c_str());
     return false;
@@ -264,7 +327,7 @@ static bool loadTokenizer(TokenizerConfig& cfg, const std::string& tokenizerPath
 }
 
 static bool loadConfig(TokenizerConfig& cfg, const std::string& cfgPath) {
-  std::ifstream in(cfgPath);
+  std::ifstream in(cfgPath, std::ios::binary);
   if (!in) {
     LOGE("Cannot open file: %s", cfgPath.c_str());
     return false;
@@ -346,19 +409,82 @@ static std::unique_ptr<Component> createTemplateProcessing(const std::unique_ptr
   return std::move(tp);
 }
 
+static std::unique_ptr<Component> createMetaspace(const std::unique_ptr<Config>& cfg) {
+  if (!cfg) {
+    return nullptr;
+  }
+  auto* config = dynamic_cast<ConfigMetaspace*>(cfg.get());
+  auto tp = std::make_unique<Metaspace>(config->replacement, config->prependScheme, config->split);
+  return std::move(tp);
+}
+
+static std::unique_ptr<Component> createReplace(const std::unique_ptr<Config>& cfg) {
+  if (!cfg) {
+    return nullptr;
+  }
+  auto* config = dynamic_cast<ConfigReplace*>(cfg.get());
+  auto tp = std::make_unique<Replace>(config->patternString, config->patternRegex, config->content);
+  return std::move(tp);
+}
+
+static std::unique_ptr<Component> createStrip(const std::unique_ptr<Config>& cfg) {
+  if (!cfg) {
+    return nullptr;
+  }
+  auto* config = dynamic_cast<ConfigStrip*>(cfg.get());
+  auto tp = std::make_unique<Strip>(config->content, config->start, config->stop);
+  return std::move(tp);
+}
+
+static std::unique_ptr<Component> createNoParams(const std::unique_ptr<Config>& cfg) {
+  if (!cfg) {
+    return nullptr;
+  }
+  switch (cfg->type) {
+    case ComponentType::BYTE_FALLBACK:
+      return std::make_unique<ByteFallback>();
+    case ComponentType::FUSE:
+      return std::make_unique<Fuse>();
+    case ComponentType::NFC:
+      return std::make_unique<NFC>();
+    case ComponentType::NFD:
+      return std::make_unique<NFD>();
+    case ComponentType::NFKC:
+      return std::make_unique<NFKC>();
+    case ComponentType::NFKD:
+      return std::make_unique<NFKD>();
+    default:
+      break;
+  }
+  return nullptr;
+}
+
 std::unique_ptr<Component> createComponent(const std::unique_ptr<Config>& cfg) {  // NOLINT(misc-no-recursion)
   if (!cfg) {
     return nullptr;
   }
   switch (cfg->type) {
+    case ComponentType::BPE:
+      return createBPE(cfg);
+    case ComponentType::BYTE_FALLBACK:
+    case ComponentType::FUSE:
+    case ComponentType::NFC:
+    case ComponentType::NFD:
+    case ComponentType::NFKC:
+    case ComponentType::NFKD:
+      return createNoParams(cfg);
+    case ComponentType::BYTE_LEVEL:
+      return createByteLevel(cfg);
+    case ComponentType::METASPACE:
+      return createMetaspace(cfg);
+    case ComponentType::REPLACE:
+      return createReplace(cfg);
     case ComponentType::SEQUENCE:
       return createSequence(cfg);
     case ComponentType::SPLIT:
       return createSplit(cfg);
-    case ComponentType::BYTE_LEVEL:
-      return createByteLevel(cfg);
-    case ComponentType::BPE:
-      return createBPE(cfg);
+    case ComponentType::STRIP:
+      return createStrip(cfg);
     case ComponentType::TEMPLATE_PROCESSING:
       return createTemplateProcessing(cfg);
     default:

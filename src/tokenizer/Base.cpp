@@ -30,4 +30,12 @@ std::vector<int32_t> ComponentSequence::postProcess(const std::vector<int32_t>& 
   return currIds;
 }
 
+std::vector<std::string> ComponentSequence::decode(const std::vector<std::string>& pieces) {
+  std::vector<std::string> currPieces = pieces;
+  for (auto& comp : components) {
+    currPieces = comp->decode(currPieces);
+  }
+  return currPieces;
+}
+
 }  // namespace tinygpt::tokenizer

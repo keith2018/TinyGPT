@@ -11,7 +11,10 @@
 namespace tinygpt::tokenizer {
 
 struct TemplateElement {
-  enum Type { SpecialToken, Sequence } type;
+  enum Type {
+    SpecialToken,
+    Sequence
+  } type;
   std::string id;
   int typeId;
 };

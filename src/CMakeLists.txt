@@ -28,6 +28,11 @@ set(PCRE2_SUPPORT_JIT ON CACHE BOOL "" FORCE)
 set(PCRE2_BUILD_PCRE2_8 ON CACHE BOOL "" FORCE)
 add_subdirectory(${THIRD_PARTY_DIR}/pcre2 pcre2)
 
+#utf8proc
+set(UTF8PROC_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(UTF8PROC_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(${THIRD_PARTY_DIR}/utf8proc utf8proc)
+
 file(GLOB TinyGPT_src
         "${CMAKE_CURRENT_SOURCE_DIR}/huggingface/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/model/*.cpp"
@@ -36,7 +41,7 @@ file(GLOB TinyGPT_src
 )
 
 add_library(${PROJECT_NAME} STATIC ${TinyGPT_src})
-target_link_libraries(${PROJECT_NAME} TinyTorch_lib pcre2-8)
+target_link_libraries(${PROJECT_NAME} TinyTorch_lib pcre2-8 utf8proc)
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${THIRD_PARTY_DIR}/pcre2/src

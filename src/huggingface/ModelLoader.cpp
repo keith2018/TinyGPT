@@ -8,6 +8,7 @@
 
 #include "model/ModelGPT2.h"
 #include "model/ModelLlama.h"
+#include "model/ModelMistral.h"
 #include "model/ModelQwen2.h"
 #include "util/PathUtils.h"
 
@@ -54,6 +55,9 @@ bool ModelLoader::load(const std::string& dir, tinytorch::Device device, tinytor
   } else if (context_.modelConfig->modelType == model::MODEL_TYPE_QWEN2) {
     auto* config = dynamic_cast<model::Qwen2Config*>(context_.modelConfig.get());
     context_.model = std::make_unique<ModelQwen2>(*config, device);
+  } else if (context_.modelConfig->modelType == model::MODEL_TYPE_MISTRAL) {
+    auto* config = dynamic_cast<model::MistralConfig*>(context_.modelConfig.get());
+    context_.model = std::make_unique<ModelMistral>(*config, device);
   } else {
     LOGE("model type not support: %s", context_.modelConfig->modelType.c_str());
     return false;

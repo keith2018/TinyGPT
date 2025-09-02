@@ -19,12 +19,20 @@ namespace tinygpt::tokenizer {
 
 enum class ComponentType {
   UNKNOWN = 0,
+  BPE,
+  BYTE_FALLBACK,
+  BYTE_LEVEL,
+  FUSE,
+  METASPACE,
+  NFC,
+  NFD,
+  NFKC,
+  NFKD,
+  REPLACE,
   SEQUENCE,
   SPLIT,
-  BYTE_LEVEL,
-  BPE,
-  TEMPLATE_PROCESSING,
-  NFC,
+  STRIP,
+  TEMPLATE_PROCESSING
 };
 
 using Range = std::pair<uint32_t, uint32_t>;  // [begin, end]
@@ -96,7 +104,7 @@ class Component {
   virtual std::vector<int32_t> postProcess(const std::vector<int32_t> &ids, bool addSpecialTokens) { return {}; }
 
   // Decoder
-  virtual std::string decode(const std::vector<std::string> &pieces) { return {}; }
+  virtual std::vector<std::string> decode(const std::vector<std::string> &pieces) { return {}; }
 };
 
 class ComponentSequence : public Component {
@@ -110,6 +118,9 @@ class ComponentSequence : public Component {
 
   // PostProcessor
   std::vector<int32_t> postProcess(const std::vector<int32_t> &ids, bool addSpecialTokens) override;
+
+  // Decoder
+  std::vector<std::string> decode(const std::vector<std::string> &pieces) override;
 
  protected:
   std::vector<std::unique_ptr<Component>> components;

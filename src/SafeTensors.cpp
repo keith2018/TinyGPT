@@ -229,7 +229,7 @@ bool SafeTensors::loadInternal(tt::nn::Module& module, const std::string& path, 
 }
 
 bool SafeTensors::loadMulti(tt::nn::Module& module, const std::string& indexPath, bool strict) {
-  std::ifstream ifs(indexPath);
+  std::ifstream ifs(indexPath, std::ios::binary);
   if (!ifs.is_open()) {
     LOGE("Error open index file: %s", indexPath.c_str());
     return false;

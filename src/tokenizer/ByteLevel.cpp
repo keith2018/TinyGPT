@@ -7,93 +7,103 @@
 #include "ByteLevel.h"
 
 #include "Split.h"
+#include "utf8proc/utf8proc.h"
 
 namespace tinygpt::tokenizer {
 
-// Ref https://github.com/openai/gpt-2/blob/master/src/encoder.py
-std::vector<char32_t> ByteLevel::bytesToUtf8() {
-  std::vector<char32_t> b2u(256, 0);
+class ByteLevelHelper {
+ public:
+  static const ByteLevelHelper& instance() {
+    static const ByteLevelHelper helper;
+    return helper;
+  }
+  const std::array<char32_t, 256>& getBytesChar() const { return bytesChar_; }
+  const std::array<std::array<char, 4>, 256>& getTable() const { return table_; }
+  const std::array<uint8_t, 256>& getLengths() const { return lengths_; }
 
-  std::vector<std::pair<uint8_t, uint8_t>> ranges = {{'!', '~'}, {'\xA1', '\xAC'}, {'\xAE', '\xFF'}};
-  for (auto& [start, end] : ranges) {
-    for (int16_t i = start; i <= end; i++) {
-      b2u[i] = static_cast<char32_t>(i);
+ private:
+  ByteLevelHelper() {
+    // Ref https://github.com/openai/gpt-2/blob/master/src/encoder.py
+    bytesChar_.fill(0);
+    std::vector<std::pair<uint8_t, uint8_t>> ranges = {{'!', '~'}, {'\xA1', '\xAC'}, {'\xAE', '\xFF'}};
+    for (auto& [start, end] : ranges) {
+      for (int16_t i = start; i <= end; i++) {
+        bytesChar_[i] = static_cast<char32_t>(i);
+      }
+    }
+    uint8_t n = 0;
+    for (int16_t i = 0; i < 256; i++) {
+      if (bytesChar_[i] == 0) {
+        bytesChar_[i] = static_cast<char32_t>(256 + n);
+        n++;
+      }
+    }
+
+    for (int16_t i = 0; i < 256; i++) {
+      uint8_t buf[4];
+      auto len = utf8proc_encode_char(static_cast<utf8proc_int32_t>(bytesChar_[i]), buf);
+      if (len < 0) {
+        table_[i][0] = '?';
+        lengths_[i] = 1;
+      } else {
+        for (int j = 0; j < len; j++) {
+          table_[i][j] = static_cast<char>(buf[j]);
+        }
+        lengths_[i] = static_cast<uint8_t>(len);
+      }
     }
   }
+  std::array<char32_t, 256> bytesChar_{};
+  std::array<std::array<char, 4>, 256> table_{};
+  std::array<uint8_t, 256> lengths_{};
+};
 
-  uint8_t n = 0;
-  for (int16_t i = 0; i < 256; i++) {
-    if (b2u[i] == 0) {
-      b2u[i] = static_cast<char32_t>(256 + n);
-      n++;
-    }
-  }
-  return b2u;
-}
+const std::array<char32_t, 256> ByteLevel::bytesChar_ = [] { return ByteLevelHelper::instance().getBytesChar(); }();
 
-static std::array<std::array<char, 2>, 256> makeByteUtf8Table(const std::vector<char32_t>& bytesChar,
-                                                              std::array<uint8_t, 256>& outLen) {
-  std::array<std::array<char, 2>, 256> table{};
-  for (int16_t i = 0; i < 256; i++) {
-    char32_t cp = bytesChar[i];
-    if (cp <= 0x7F) {
-      table[i][0] = static_cast<char>(cp);
-      outLen[i] = 1;
-    } else if (cp <= 0x7FF) {
-      table[i][0] = static_cast<char>(0xC0 | (cp >> 6));
-      table[i][1] = static_cast<char>(0x80 | (cp & 0x3F));
-      outLen[i] = 2;
-    } else {
-      // invalid
-      table[i][0] = '?';
-      outLen[i] = 1;
-    }
+const std::array<uint8_t, 256> ByteLevel::byteUtf8Len_ = [] { return ByteLevelHelper::instance().getLengths(); }();
+
+const std::array<std::array<char, 4>, 256> ByteLevel::byteUtf8Table_ = [] {
+  return ByteLevelHelper::instance().getTable();
+}();
+
+const std::array<uint8_t, UNICODE_CODEPOINT_MAX> ByteLevel::codepointByteTable_ = [] {
+  static std::array<uint8_t, UNICODE_CODEPOINT_MAX> table{};
+  table.fill(0);  // default: 0
+  for (int i = 0; i < 256; i++) {
+    auto cp = static_cast<uint32_t>(bytesChar_[i]);
+    table[cp] = static_cast<uint8_t>(i);
   }
   return table;
-}
-
-const std::vector<char32_t> ByteLevel::bytesChar_ = bytesToUtf8();
-const std::array<uint8_t, 256> ByteLevel::byteUtf8Len_ = [] {
-  std::array<uint8_t, 256> len{};
-  makeByteUtf8Table(ByteLevel::bytesChar_, len);
-  return len;
-}();
-const std::array<std::array<char, 2>, 256> ByteLevel::byteUtf8Table_ = [] {
-  std::array<uint8_t, 256> len{};
-  return makeByteUtf8Table(ByteLevel::bytesChar_, len);
 }();
 
 std::string ByteLevel::utf8ToBytes(std::string_view str) {
-  static ankerl::unordered_dense::map<std::string_view, uint8_t> utf8ToByte;
-  static bool inited = false;
-  if (!inited) {
-    for (int16_t i = 0; i < 256; ++i) {
-      const auto len = byteUtf8Len_[i];
-      std::string_view key(byteUtf8Table_[i].data(), len);
-      utf8ToByte[key] = static_cast<uint8_t>(i);
-    }
-    inited = true;
-  }
-
   std::string result;
-  size_t i = 0;
-  while (i < str.size()) {
-    bool found = false;
-    for (auto len = 1; len <= 2; len++) {
-      if (i + len <= str.size()) {
-        auto key = str.substr(i, len);
-        auto it = utf8ToByte.find(key);
-        if (it != utf8ToByte.end()) {
-          result.push_back(static_cast<char>(it->second));
-          i += len;
-          found = true;
-          break;
-        }
-      }
+  result.reserve(str.size());
+
+  const auto* data = reinterpret_cast<const uint8_t*>(str.data());
+  auto len = static_cast<utf8proc_ssize_t>(str.size());
+  utf8proc_ssize_t i = 0;
+
+  while (i < len) {
+    utf8proc_int32_t codepoint;
+    auto charLen = utf8proc_iterate(data + i, len - i, &codepoint);
+    if (charLen < 0) {
+      LOGE("ByteLevel: invalid UTF-8 at position %zu", i);
+      ASSERT(false);
+      break;
     }
-    if (!found) {
-      LOGE("Invalid byte level utf8 string %s at position %d", str.data(), i);
+    if (codepoint < 0 || codepoint >= static_cast<int>(codepointByteTable_.size())) {
+      LOGE("ByteLevel: codepoint %d out of range", codepoint);
+      ASSERT(false);
+      break;
     }
+    auto byte = codepointByteTable_[codepoint];
+    if (byte == 0) {
+      result.append(std::string_view{str.data() + i, static_cast<size_t>(charLen)});
+    } else {
+      result.push_back(static_cast<char>(byte));
+    }
+    i += charLen;
   }
   return result;
 }
@@ -104,64 +114,38 @@ int32_t ByteLevel::findIncompletePos(std::string_view str) {
     return -1;
   }
 
-  auto maxCheck = std::min(4, len);
-  auto first = len - 1;
-  while (first >= 0 && (len - first) <= 4) {
-    auto c = static_cast<unsigned char>(str[first]);
-    if ((c & 0xC0) != 0x80) {
-      int32_t expected;
-      if ((c & 0x80) == 0) {
-        expected = 1;
-      } else if ((c & 0xE0) == 0xC0) {
-        expected = 2;
-      } else if ((c & 0xF0) == 0xE0) {
-        expected = 3;
-      } else if ((c & 0xF8) == 0xF0) {
-        expected = 4;
-      } else {
-        return first;
-      }
-      auto actual = len - first;
-      if (actual < expected) {
-        return first;
-      }
-      return -1;
+  const auto* data = reinterpret_cast<const uint8_t*>(str.data());
+  int32_t start = std::max(0, len - 4);
+  for (int32_t pos = start; pos < len; pos++) {
+    utf8proc_int32_t codepoint;
+    auto charLen = utf8proc_iterate(data + pos, len - pos, &codepoint);
+    if (charLen < 0) {
+      return pos;
     }
-    first--;
-  }
-  if (maxCheck == len) {
-    return 0;
+    if (pos + charLen > len) {
+      return pos;
+    }
   }
   return -1;
 }
 
 std::vector<std::string_view> ByteLevel::splitUTF8(std::string_view str) {
   std::vector<std::string_view> results;
-  results.reserve(str.length());
+  results.reserve(str.size());
 
-  size_t idx = 0;
-  while (idx < str.size()) {
-    auto c = static_cast<unsigned char>(str[idx]);
-    size_t charLen = 0;
-    if ((c & 0x80) == 0) {
-      // 1-byte: 0xxxxxxx
-      charLen = 1;
-    } else if ((c & 0xE0) == 0xC0) {
-      // 2-byte: 110xxxxx 10xxxxxx
-      if (idx + 1 < str.size() && (static_cast<unsigned char>(str[idx + 1]) & 0xC0) == 0x80) {
-        charLen = 2;
-      } else {
-        // malformed
-        LOGE("splitUTF8 error: invalid char: %c", c);
-        charLen = 1;
-      }
-    } else {
-      LOGE("splitUTF8 error: invalid char: %c", c);
-      // malformed
-      charLen = 1;
+  const auto* data = reinterpret_cast<const uint8_t*>(str.data());
+  auto len = static_cast<utf8proc_ssize_t>(str.size());
+  utf8proc_ssize_t i = 0;
+
+  while (i < len) {
+    utf8proc_int32_t codepoint;
+    auto charLen = utf8proc_iterate(data + i, len - i, &codepoint);
+    if (charLen < 0) {
+      LOGE("splitUTF8 error: invalid UTF-8 at pos %zu", i);
+      charLen = 1;  // skip invalid byte
     }
-    results.emplace_back(str.substr(idx, charLen));
-    idx += charLen;
+    results.emplace_back(str.substr(i, charLen));
+    i += charLen;
   }
   return results;
 }
@@ -237,17 +221,6 @@ std::vector<int32_t> ByteLevel::postProcess(const std::vector<int32_t>& ids, boo
   return ids;
 }
 
-std::string ByteLevel::decode(const std::vector<std::string>& pieces) {
-  std::string ret;
-  size_t len = 0;
-  for (auto& s : pieces) {
-    len += s.size();
-  }
-  ret.reserve(len);
-  for (auto& s : pieces) {
-    ret.append(s);
-  }
-  return ret;
-}
+std::vector<std::string> ByteLevel::decode(const std::vector<std::string>& pieces) { return pieces; }
 
 }  // namespace tinygpt::tokenizer
