@@ -179,25 +179,25 @@ class GPT2LMHeadModel : public tt::nn::Module {
   explicit GPT2LMHeadModel(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
       : kvCache_(kvCache),
         transformer(GPT2Model(config, kvCache, options)),
-        out_head(tt::nn::Linear(config.nEmbd, config.vocabSize, false, options)) {
+        lm_head(tt::nn::Linear(config.nEmbd, config.vocabSize, false, options)) {
     // shared weights
-    out_head.weight() = transformer.wte.weight();
+    lm_head.weight() = transformer.wte.weight();
     registerModules({
         {"transformer", transformer},
-        {"out_head", out_head},
+        {"lm_head", lm_head},
     });
   }
 
   tinytorch::Tensor forward(const tt::Tensor &inputIds) override {
     auto x = transformer(inputIds);
-    auto logits = out_head(x);
+    auto logits = lm_head(x);
     return logits;
   }
 
   KVCacheManager &kvCache_;
 
   GPT2Model transformer;
-  tt::nn::Linear out_head;
+  tt::nn::Linear lm_head;
 };
 
 }  // namespace gpt2

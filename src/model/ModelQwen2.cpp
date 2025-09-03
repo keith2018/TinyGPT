@@ -188,25 +188,25 @@ class Qwen2ForCausalLM : public tt::nn::Module {
  public:
   Qwen2ForCausalLM(const Config &config, KVCacheManager &kvCache, tt::Options options = {})
       : model(Qwen2Model(config, kvCache, options)),
-        out_head(tt::nn::Linear(config.hiddenSize, config.vocabSize, false, options)) {
+        lm_head(tt::nn::Linear(config.hiddenSize, config.vocabSize, false, options)) {
     if (config.tieWordEmbeddings) {
       // shared weights
-      out_head.weight() = model.embed_tokens.weight();
+      lm_head.weight() = model.embed_tokens.weight();
     }
     registerModules({
         {"model", model},
-        {"out_head", out_head},
+        {"lm_head", lm_head},
     });
   }
 
   tinytorch::Tensor forward(const tt::Tensor &inputIds) override {
     auto x = model(inputIds);
-    auto logits = out_head(x);
+    auto logits = lm_head(x);
     return logits;
   }
 
   Qwen2Model model;
-  tt::nn::Linear out_head;
+  tt::nn::Linear lm_head;
 };
 
 }  // namespace qwen2
