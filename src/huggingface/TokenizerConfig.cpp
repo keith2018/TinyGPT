@@ -122,6 +122,13 @@ static std::unique_ptr<Config> parseConfigBPE(const rapidjson::Value& j) {
           c->merges[{std::string(s.substr(0, pos)), std::string(s.substr(pos + 1))}] = idx;
           idx++;
         }
+      } else if (m.IsArray()) {
+        auto arr = m.GetArray();
+        ASSERT(arr.Size() == 2);
+        auto k = arr[0].GetString();
+        auto v = arr[1].GetString();
+        c->merges[{k, v}] = idx;
+        idx++;
       }
     }
   }
