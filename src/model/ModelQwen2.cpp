@@ -223,6 +223,8 @@ bool ModelQwen2::load(const std::string &path) { return SafeTensors::load(*model
 
 int64_t ModelQwen2::numLayers() { return config_.numHiddenLayers; }
 
+int64_t ModelQwen2::contextSize() { return config_.maxPositionEmbeddings; }
+
 tt::nn::Module &ModelQwen2::model() { return *model_; }
 
 }  // namespace tinygpt

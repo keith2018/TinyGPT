@@ -20,8 +20,9 @@ struct GPTConfig {
 };
 
 struct GPTOutput {
+  int64_t batch;
   std::vector<int32_t> tokenIds;
-  std::string text;
+  std::vector<std::string> texts;
 };
 
 class GPTEngine {
@@ -29,13 +30,13 @@ class GPTEngine {
   explicit GPTEngine(GPTConfig config);
 
   bool prepare();
-  GPTOutput generateSync(const std::string& text);
+  GPTOutput generateSync(tinytorch::ArrayView<std::string> texts);
 
  private:
-  tinytorch::Tensor genNextToken(const tinytorch::Tensor& tokens);
+  tinytorch::Tensor genNextToken(const tinytorch::Tensor& tokens, const tinytorch::Tensor& mask);
 
-  tinytorch::Tensor encodeTexts(const std::string& text) const;
-  GPTOutput decodeTokens(const tinytorch::Tensor& tokens, int64_t offset = 0) const;
+  tinytorch::TensorPair encodeTexts(tinytorch::ArrayView<std::string> texts) const;
+  GPTOutput decodeTokens(const tinytorch::Tensor& tokens, int64_t offset) const;
 
   GPTConfig config_;
   Sampler sampler_;

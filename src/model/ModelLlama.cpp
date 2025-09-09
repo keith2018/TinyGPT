@@ -230,6 +230,8 @@ bool ModelLlama::load(const std::string &path) { return SafeTensors::load(*model
 
 int64_t ModelLlama::numLayers() { return config_.numHiddenLayers; }
 
+int64_t ModelLlama::contextSize() { return llama::getContextSize(config_); }
+
 tt::nn::Module &ModelLlama::model() { return *model_; }
 
 }  // namespace tinygpt

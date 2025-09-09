@@ -49,6 +49,7 @@ class GPTModel {
 
   virtual bool load(const std::string &path) = 0;
   virtual int64_t numLayers() = 0;
+  virtual int64_t contextSize() = 0;
   virtual tinytorch::nn::Module &model() = 0;
 
  protected:
