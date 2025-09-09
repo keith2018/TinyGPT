@@ -12,10 +12,11 @@ namespace tinygpt {
 
 enum class GPTModelType : int8_t {
   UNKNOWN = 0,
-  GPT2 = 1,
-  LLAMA = 2,
-  QWEN2 = 3,
-  MISTRAL = 4,
+  GPT2,
+  LLAMA,
+  QWEN2,
+  QWEN3,
+  MISTRAL,
 };
 
 struct KVCacheStates {

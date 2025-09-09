@@ -87,9 +87,10 @@ std::unique_ptr<ModelConfig> loadModelConfig(const std::string& cfgPath) {
     }
     cfg->ropeTheta = getJsonValue<float>(doc, "rope_theta", 1.f);
     config = std::move(cfg);
-  } else if (modelType == MODEL_TYPE_QWEN2) {
-    auto cfg = std::make_unique<Qwen2Config>();
+  } else if (modelType == MODEL_TYPE_QWEN2 || modelType == MODEL_TYPE_QWEN3) {
+    auto cfg = std::make_unique<QwenConfig>();
     cfg->ropeTheta = getJsonValue<float>(doc, "rope_theta", 10000.f);
+    cfg->headDim = getJsonValue<int64_t>(doc, "head_dim", -1);
     cfg->slidingWindow = getJsonValue<int64_t>(doc, "sliding_window", -1);
     cfg->useSlidingWindow = getJsonValue<bool>(doc, "use_sliding_window", false);
     cfg->useMRope = getJsonValue<bool>(doc, "use_mrope", false);

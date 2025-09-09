@@ -10,6 +10,7 @@
 #include "model/ModelLlama.h"
 #include "model/ModelMistral.h"
 #include "model/ModelQwen2.h"
+#include "model/ModelQwen3.h"
 #include "util/PathUtils.h"
 
 namespace tinygpt::huggingface {
@@ -53,8 +54,11 @@ bool ModelLoader::load(const std::string& dir, tinytorch::Device device, tinytor
     auto* config = dynamic_cast<model::LlamaConfig*>(context_.modelConfig.get());
     context_.model = std::make_unique<ModelLlama>(*config, device);
   } else if (context_.modelConfig->modelType == model::MODEL_TYPE_QWEN2) {
-    auto* config = dynamic_cast<model::Qwen2Config*>(context_.modelConfig.get());
+    auto* config = dynamic_cast<model::QwenConfig*>(context_.modelConfig.get());
     context_.model = std::make_unique<ModelQwen2>(*config, device);
+  } else if (context_.modelConfig->modelType == model::MODEL_TYPE_QWEN3) {
+    auto* config = dynamic_cast<model::QwenConfig*>(context_.modelConfig.get());
+    context_.model = std::make_unique<ModelQwen3>(*config, device);
   } else if (context_.modelConfig->modelType == model::MODEL_TYPE_MISTRAL) {
     auto* config = dynamic_cast<model::MistralConfig*>(context_.modelConfig.get());
     context_.model = std::make_unique<ModelMistral>(*config, device);
