@@ -16,6 +16,7 @@ namespace tinygpt::huggingface::model {
 constexpr const char* MODEL_TYPE_GPT2 = "gpt2";
 constexpr const char* MODEL_TYPE_LLAMA = "llama";
 constexpr const char* MODEL_TYPE_QWEN2 = "qwen2";
+constexpr const char* MODEL_TYPE_QWEN3 = "qwen3";
 constexpr const char* MODEL_TYPE_MISTRAL = "mistral";
 
 struct ModelConfig {
@@ -64,8 +65,9 @@ struct LlamaConfig : ModelConfig {
   float ropeTheta;
 };
 
-struct Qwen2Config : ModelConfig {
+struct QwenConfig : ModelConfig {
   float ropeTheta;
+  int64_t headDim;
   int64_t slidingWindow;
   bool useSlidingWindow;
   bool useMRope;

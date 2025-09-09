@@ -14,16 +14,16 @@ namespace huggingface::model {
 struct QwenConfig;
 }  // namespace huggingface::model
 
-namespace qwen2 {
-class Qwen2ForCausalLM;
-}  // namespace qwen2
+namespace qwen3 {
+class Qwen3ForCausalLM;
+}  // namespace qwen3
 
-class ModelQwen2 : public GPTModel {
+class ModelQwen3 : public GPTModel {
  public:
-  ModelQwen2(const huggingface::model::QwenConfig &config, tinytorch::Device device);
-  ~ModelQwen2() override;
+  ModelQwen3(const huggingface::model::QwenConfig &config, tinytorch::Device device);
+  ~ModelQwen3() override;
 
-  GPTModelType type() override { return GPTModelType::QWEN2; }
+  GPTModelType type() override { return GPTModelType::QWEN3; }
 
   bool load(const std::string &path) override;
   int64_t numLayers() override;
@@ -32,7 +32,7 @@ class ModelQwen2 : public GPTModel {
 
  private:
   const huggingface::model::QwenConfig &config_;
-  std::unique_ptr<qwen2::Qwen2ForCausalLM> model_;
+  std::unique_ptr<qwen3::Qwen3ForCausalLM> model_;
 };
 
 }  // namespace tinygpt
