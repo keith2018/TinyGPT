@@ -27,6 +27,7 @@ class ModelMistral : public GPTModel {
 
   bool load(const std::string &path) override;
   int64_t numLayers() override;
+  int64_t contextSize() override;
   tinytorch::nn::Module &model() override;
 
  private:

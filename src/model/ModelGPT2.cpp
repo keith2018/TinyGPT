@@ -214,6 +214,8 @@ bool ModelGPT2::load(const std::string &path) { return SafeTensors::load(model_-
 
 int64_t ModelGPT2::numLayers() { return config_.nLayer; }
 
+int64_t ModelGPT2::contextSize() { return config_.nCtx; }
+
 tt::nn::Module &ModelGPT2::model() { return *model_; }
 
 }  // namespace tinygpt

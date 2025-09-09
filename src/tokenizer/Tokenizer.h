@@ -19,6 +19,7 @@
 #include "Regex.h"
 #include "Split.h"
 #include "TemplateProcessing.h"
+#include "Utils/VectorUtils.h"
 
 namespace tinygpt::tokenizer {
 
@@ -33,14 +34,17 @@ class Tokenizer {
   std::string id2Token(int32_t id);
 
   std::vector<int32_t> encode(const std::string& text, bool allowAddedTokens = true);
-  std::vector<std::vector<int32_t>> encodeBatch(const std::vector<std::string>& texts, uint32_t numThreads = 8,
+  std::vector<std::vector<int32_t>> encodeBatch(tinytorch::ArrayView<std::string> texts, uint32_t numThreads = 8,
                                                 bool allowAddedTokens = true);
 
-  std::string decode(const std::vector<int32_t>& ids, int64_t offset = 0);
-  std::vector<std::string> decodeBatch(const std::vector<std::vector<int32_t>>& ids, uint32_t numThreads = 8);
+  std::string decode(tinytorch::ArrayView<int32_t> ids, uint32_t offset = 0);
+  std::vector<std::string> decodeBatch(tinytorch::ArrayView<tinytorch::ArrayView<int32_t>> ids,
+                                       uint32_t numThreads = 8);
+  std::vector<std::string> decodeBatch(tinytorch::ArrayView<int32_t> ids, uint32_t batch, uint32_t offset = 0,
+                                       uint32_t numThreads = 8);
 
   // check whether the utf-8 sequence is complete, if not, return it on the next call.
-  std::string decodeStream(const std::vector<int32_t>& ids);
+  std::string decodeStream(tinytorch::ArrayView<int32_t> ids);
 
   int32_t bosTokenId() const { return bosTokenId_; }
   int32_t eosTokenId() const { return eosTokenId_; }
@@ -57,7 +61,7 @@ class Tokenizer {
 
   void workerThread();
   template <typename Input, typename Output, typename Func>
-  void parallelFor(const std::vector<Input>& inputs, std::vector<Output>& outputs, Func func, uint32_t numThreads);
+  void parallelFor(tinytorch::ArrayView<Input> inputs, std::vector<Output>& outputs, Func func, uint32_t numThreads);
 
   std::unique_ptr<Component> normalizer_;
   std::unique_ptr<Component> preTokenizer_;

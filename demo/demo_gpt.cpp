@@ -10,7 +10,13 @@
 
 // clone from huggingface
 const std::string MODEL_DIR = "path to model files (huggingface repo)";
-const std::string INPUT_STR = "The future of AI is";
+
+const std::vector<std::string> INPUT_STRS = {
+    "Hello, my name is",
+    "The president of the United States is",
+    "The capital of France is",
+    "The future of AI is",
+};
 
 void demo_gpt_impl(const std::string &modelDir) {
   LOGI("demo_gpt(), dir: %s", modelDir.c_str());
@@ -33,10 +39,15 @@ void demo_gpt_impl(const std::string &modelDir) {
   tinytorch::Timer timer;
   timer.start();
 
-  auto output = engine.generateSync(INPUT_STR);
+  auto output = engine.generateSync(INPUT_STRS);
 
-  LOGI("Prompt:\t'%s'", INPUT_STR.c_str());
-  LOGI("Output:\t'%s'", tinygpt::StringUtils::repr(output.text).c_str());
+  LOGI("Generated Outputs:");
+  LOGI("------------------------------------------------------------");
+  for (auto i = 0; i < output.batch; i++) {
+    LOGI("Prompt:    '%s'", INPUT_STRS[i].c_str());
+    LOGI("Output:    '%s'", tinygpt::StringUtils::repr(output.texts[i]).c_str());
+    LOGI("------------------------------------------------------------");
+  }
 
   timer.mark();
   LOGI("Time cost: %lld ms, speed: %.2f token/s", timer.elapseMillis(),

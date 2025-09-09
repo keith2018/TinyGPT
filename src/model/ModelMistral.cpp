@@ -223,6 +223,8 @@ bool ModelMistral::load(const std::string &path) { return SafeTensors::load(*mod
 
 int64_t ModelMistral::numLayers() { return config_.numHiddenLayers; }
 
+int64_t ModelMistral::contextSize() { return config_.maxPositionEmbeddings; }
+
 tt::nn::Module &ModelMistral::model() { return *model_; }
 
 }  // namespace tinygpt
