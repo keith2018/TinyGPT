@@ -4,6 +4,7 @@ Tiny C++ LLM inference implementation from scratch.
 - [x] GPT-2
 - [x] Llama3.2
 - [x] Qwen2.5
+- [x] Qwen3
 - [x] Mistral
 
 ## Features
@@ -40,6 +41,7 @@ git clone https://huggingface.co/meta-llama/Llama-3.2-1B
 git clone https://huggingface.co/meta-llama/Llama-3.2-3B
 git clone https://huggingface.co/Qwen/Qwen2.5-0.5B
 git clone https://huggingface.co/Qwen/Qwen2.5-3B
+git clone https://huggingface.co/Qwen/Qwen3-1.7B
 git clone https://huggingface.co/mistralai/Mistral-7B-v0.3
 ```
 if success, set the path in file [`./demo/demo_gpt.cpp`](https://github.com/keith2018/TinyGPT/blob/main/demo/demo_gpt.cpp)
@@ -61,6 +63,29 @@ This will generate the executable file and copy assets to directory `demo/bin`, 
 ```bash
 cd demo/bin
 ./TinyGPT_demo
+```
+
+demo output:
+
+```bash
+[INFO] Load model ...
+[INFO] Load model done.
+[INFO] Load model done.
+[INFO] Generated Outputs:
+[INFO] ------------------------------------------------------------
+[INFO] Prompt:    'Hello, my name is'
+[INFO] Output:    ' Max! I am Phelan and I'm the world's greatest magician! I am the world's greatest magician! You are the world's greatest magician! You'
+[INFO] ------------------------------------------------------------
+[INFO] Prompt:    'The president of the United States is'
+[INFO] Output:    ' on a temporary trip to Asia, and the Pentagon has made several announcements about what's next for the war on terror.\n\nThe next day, General Martin Dempsey'
+[INFO] ------------------------------------------------------------
+[INFO] Prompt:    'The capital of France is'
+[INFO] Output:    ' located in the eastern part of the country, so it is very easy to find houses in this part of the country. The most important houses are in Paris, and'
+[INFO] ------------------------------------------------------------
+[INFO] Prompt:    'The future of AI is'
+[INFO] Output:    ' forever. Our time is now.\n\n\nSequel to the game, The Mighty Ducks is available on Android and iOS, and a new Android app is also coming'
+[INFO] ------------------------------------------------------------
+[INFO] Time cost: 1907 ms, speed: 83.90 token/s
 ```
 
 ## Python binding
