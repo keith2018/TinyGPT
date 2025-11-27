@@ -40,7 +40,7 @@ std::string SafeTensors::toTypeString(tt::DType type) {
       break;
   }
 
-  LOGE("Unknown tt::DType: %s", tt::dtype::toString(type).c_str());
+  LOGE("Unknown tt::DType: %s", tt::dtypeToString(type));
   ASSERT(false);
   return {};
 }
