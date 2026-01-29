@@ -17,16 +17,16 @@ StringPieces Metaspace::preTokenize(const StringPieces &text) {
   std::string processedText;
 
   for (const auto &range : text.pieces) {
-    std::string pieceText = text.backStr.substr(range.first, range.second - range.first);
-    std::string newPieceText;
-    for (char c : pieceText) {
+    std::string pieceText;
+    pieceText.reserve(range.second - range.first + replacement_.size());
+    for (size_t i = range.first; i < range.second; i++) {
+      char c = text.backStr[i];
       if (c == ' ') {
-        newPieceText += replacement_;
+        pieceText.append(replacement_);
       } else {
-        newPieceText += c;
+        pieceText.push_back(c);
       }
     }
-    pieceText = newPieceText;
 
     if (prependScheme_ == kPrependSchemeAlways) {
       pieceText.insert(0, replacement_);
@@ -41,8 +41,8 @@ StringPieces Metaspace::preTokenize(const StringPieces &text) {
 
     if (split_) {
       std::vector<size_t> splitPositions;
-      for (size_t i = 0; i <= pieceText.size() - replacement_.size(); i++) {
-        if (pieceText.substr(i, replacement_.size()) == replacement_) {
+      for (size_t i = 0; i + replacement_.size() <= pieceText.size(); i++) {
+        if (pieceText.compare(i, replacement_.size(), replacement_) == 0) {
           splitPositions.push_back(startPos + i);
           i += replacement_.size() - 1;
         }
@@ -68,7 +68,7 @@ StringPieces Metaspace::preTokenize(const StringPieces &text) {
     }
   }
 
-  result.backStr = processedText;
+  result.backStr = std::move(processedText);
   return result;
 }
 
@@ -79,21 +79,22 @@ std::vector<std::string> Metaspace::decode(const std::vector<std::string> &piece
   for (size_t i = 0; i < pieces.size(); i++) {
     const auto &token = pieces[i];
     std::string decoded;
+    decoded.reserve(token.size());
 
     size_t pos = 0;
-    while (pos < token.length()) {
-      if (pos + replacement_.size() <= token.length() && token.substr(pos, replacement_.size()) == replacement_) {
+    while (pos < token.size()) {
+      if (pos + replacement_.size() <= token.size() && token.compare(pos, replacement_.size(), replacement_) == 0) {
         if (!(i == 0 && pos == 0 && prependScheme_ != kPrependSchemeNever)) {
-          decoded += ' ';
+          decoded.push_back(' ');
         }
         pos += replacement_.size();
       } else {
-        decoded += token[pos];
+        decoded.push_back(token[pos]);
         pos++;
       }
     }
 
-    retPieces.push_back(decoded);
+    retPieces.push_back(std::move(decoded));
   }
 
   return retPieces;

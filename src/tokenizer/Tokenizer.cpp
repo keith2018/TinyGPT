@@ -13,7 +13,10 @@
 namespace tinygpt::tokenizer {
 
 Tokenizer::~Tokenizer() {
-  stop_ = true;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    stop_ = true;
+  }
   cv_.notify_all();
   for (auto& t : threads_) {
     if (t.joinable()) {
@@ -82,8 +85,7 @@ std::vector<int32_t> Tokenizer::encode(const std::string& text, bool allowAddedT
   std::vector<int32_t> ret;
 
   if (!allowAddedTokens) {
-    auto ids = encodeWithModel(text, false);
-    ret.insert(ret.end(), ids.begin(), ids.end());
+    ret = encodeWithModel(text, false);
   } else {
     auto pieces = splitAddedTokens(text);
     for (auto& piece : pieces) {
@@ -99,16 +101,31 @@ std::vector<int32_t> Tokenizer::encode(const std::string& text, bool allowAddedT
       ret.insert(ret.end(), ids.begin(), ids.end());
     }
   }
-
   ASSERT(!ret.empty());
-  if (addBosToken_ && ret.front() != bosTokenId_) {
-    ret.insert(ret.begin(), bosTokenId_);
+
+  const bool insertBos = addBosToken_ && ret.front() != bosTokenId_;
+  const bool insertEos = addEosToken_ && ret.back() != eosTokenId_;
+
+  if (!insertBos && !insertEos) {
+    return ret;
   }
 
-  if (addEosToken_ && ret.back() != eosTokenId_) {
-    ret.push_back(eosTokenId_);
+  std::vector<int32_t> result;
+  result.reserve(ret.size() + (insertBos ? 1 : 0) + (insertEos ? 1 : 0));
+
+  if (insertBos) {
+    result.push_back(bosTokenId_);
   }
-  return ret;
+  result.insert(result.end(), ret.begin(), ret.end());
+  if (insertEos) {
+    result.push_back(eosTokenId_);
+  }
+  return result;
+}
+
+std::vector<std::vector<int32_t>> Tokenizer::encodeBatch(const std::vector<std::string>& texts, uint32_t numThreads,
+                                                         bool allowAddedTokens) {
+  return encodeBatch(tinytorch::ArrayView(texts), numThreads, allowAddedTokens);
 }
 
 std::vector<std::vector<int32_t>> Tokenizer::encodeBatch(tinytorch::ArrayView<std::string> texts, uint32_t numThreads,
@@ -117,6 +134,10 @@ std::vector<std::vector<int32_t>> Tokenizer::encodeBatch(tinytorch::ArrayView<st
   parallelFor<std::string, std::vector<int32_t>>(
       texts, results, [&](const std::string& s) { return encode(s, allowAddedTokens); }, numThreads);
   return results;
+}
+
+std::string Tokenizer::decode(const std::vector<int32_t>& ids, uint32_t offset) {
+  return decode(tinytorch::ArrayView(ids), offset);
 }
 
 std::string Tokenizer::decode(tinytorch::ArrayView<int32_t> ids, uint32_t offset) {
@@ -140,12 +161,26 @@ std::string Tokenizer::decode(tinytorch::ArrayView<int32_t> ids, uint32_t offset
   return ret;
 }
 
+std::vector<std::string> Tokenizer::decodeBatch(const std::vector<std::vector<int32_t>>& ids, uint32_t numThreads) {
+  std::vector<tinytorch::ArrayView<int32_t>> views;
+  views.reserve(ids.size());
+  for (const auto& v : ids) {
+    views.emplace_back(v);
+  }
+  return decodeBatch(tinytorch::ArrayView(views.data(), views.size()), numThreads);
+}
+
 std::vector<std::string> Tokenizer::decodeBatch(tinytorch::ArrayView<tinytorch::ArrayView<int32_t>> ids,
                                                 uint32_t numThreads) {
   std::vector<std::string> results(ids.size());
   parallelFor<tinytorch::ArrayView<int32_t>, std::string>(
-      ids, results, [&](tinytorch::ArrayView<int32_t> v) { return decode(v); }, numThreads);
+      ids, results, [&](tinytorch::ArrayView<int32_t> v) { return decode(v, 0); }, numThreads);
   return results;
+}
+
+std::vector<std::string> Tokenizer::decodeBatch(const std::vector<int32_t>& ids, uint32_t batch, uint32_t offset,
+                                                uint32_t numThreads) {
+  return decodeBatch(tinytorch::ArrayView(ids), batch, offset, numThreads);
 }
 
 std::vector<std::string> Tokenizer::decodeBatch(tinytorch::ArrayView<int32_t> ids, uint32_t batch, uint32_t offset,
@@ -163,6 +198,8 @@ std::vector<std::string> Tokenizer::decodeBatch(tinytorch::ArrayView<int32_t> id
       idsList, results, [&](tinytorch::ArrayView<int32_t> v) { return decode(v, offset); }, numThreads);
   return results;
 }
+
+std::string Tokenizer::decodeStream(const std::vector<int32_t>& ids) { return decodeStream(tinytorch::ArrayView(ids)); }
 
 std::string Tokenizer::decodeStream(tinytorch::ArrayView<int32_t> ids) {
   size_t totalNewLen = 0;
@@ -303,6 +340,9 @@ void Tokenizer::parallelFor(tinytorch::ArrayView<Input> inputs, std::vector<Outp
   {
     // init threads
     std::lock_guard<std::mutex> lock(mutex_);
+    if (stop_) {
+      return;
+    }
     if (threads_.size() < numThreads) {
       for (uint32_t i = threads_.size(); i < numThreads; i++) {
         threads_.emplace_back(&Tokenizer::workerThread, this);

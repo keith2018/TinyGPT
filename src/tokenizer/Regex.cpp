@@ -16,6 +16,9 @@ class Regex::Impl {
   explicit Impl(std::string_view pattern);
   ~Impl();
 
+  Impl(const Impl &) = delete;
+  Impl &operator=(const Impl &) = delete;
+
   bool valid() const;
   void matchAll(std::vector<Range> &ret, std::string_view str) const;
   static std::string quoteMeta(std::string_view unquoted);
@@ -62,27 +65,36 @@ Regex::Impl::~Impl() {
 bool Regex::Impl::valid() const { return regex_ != nullptr; }
 
 void Regex::Impl::matchAll(std::vector<Range> &ret, std::string_view str) const {
-  if (str.empty()) {
+  if (str.empty() || !regex_) {
     return;
   }
 
-  pcre2_match_data_8 *match_data = pcre2_match_data_create_from_pattern_8(regex_, nullptr);
-  if (!match_data) {
-    LOGE("call pcre2_match_data_create_from_pattern_8 error: nullptr");
-    return;
+  // thread_local cache
+  thread_local pcre2_match_data_8 *matchData = nullptr;
+  thread_local pcre2_code_8 *lastRegex = nullptr;
+
+  if (matchData == nullptr || lastRegex != regex_) {
+    if (matchData != nullptr) {
+      pcre2_match_data_free_8(matchData);
+    }
+    matchData = pcre2_match_data_create_from_pattern_8(regex_, nullptr);
+    lastRegex = regex_;
+    if (!matchData) {
+      LOGE("call pcre2_match_data_create_from_pattern_8 error: nullptr");
+      return;
+    }
   }
 
-  static const auto matcher = jitEnabled_ ? pcre2_jit_match_8 : pcre2_match_8;
+  const auto matcher = jitEnabled_ ? pcre2_jit_match_8 : pcre2_match_8;
 
   size_t offset = 0;
-  int rc = 0;
   while (offset < str.size()) {
-    rc = matcher(regex_, reinterpret_cast<PCRE2_SPTR8>(str.data()), str.size(), offset, 0, match_data, nullptr);
+    int rc = matcher(regex_, reinterpret_cast<PCRE2_SPTR8>(str.data()), str.size(), offset, 0, matchData, nullptr);
     if (rc < 0) {
       break;
     }
 
-    const auto *ov = pcre2_get_ovector_pointer_8(match_data);
+    const auto *ov = pcre2_get_ovector_pointer_8(matchData);
     const auto matchStart = ov[0], matchEnd = ov[1];
     if (matchEnd <= matchStart) {
       break;
@@ -90,7 +102,6 @@ void Regex::Impl::matchAll(std::vector<Range> &ret, std::string_view str) const 
     ret.emplace_back(matchStart, matchEnd);
     offset = matchEnd;
   }
-  pcre2_match_data_free_8(match_data);
 }
 
 // Ref: https://github.com/google/re2/blob/main/re2/re2.cc
