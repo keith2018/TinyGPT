@@ -7,6 +7,64 @@
 #pragma once
 
 #include "Modules.h"
+#include "engine/CacheManager.h"
+#include "layer/Attention.h"
+#include "layer/DecoderLayer.h"
+#include "layer/GatedMLP.h"
+#include "util/SafeTensors.h"
+
+namespace tinytorch::nn {
+
+template <typename AttnType, typename MLPType>
+class CausalLM : public Module {
+ public:
+  using DecoderLayerType = DecoderLayer<AttnType, MLPType>;
+
+  template <typename AttnFactory, typename MLPFactory>
+  CausalLM(int64_t vocabSize, int64_t hiddenSize, int64_t numLayers, float rmsNormEps, bool tieWordEmbeddings,
+           Options options, AttnFactory &&attnFactory, MLPFactory &&mlpFactory)
+      : embedTokens_(Embedding(vocabSize, hiddenSize, options)),
+        layers_(ModuleList()),
+        norm_(RMSNorm({hiddenSize}, rmsNormEps, options)),
+        lmHead_(Linear(hiddenSize, vocabSize, false, options)) {
+    for (int i = 0; i < numLayers; i++) {
+      auto attn = attnFactory(i);
+      auto mlp = mlpFactory(i);
+      auto inputLn = RMSNorm({hiddenSize}, rmsNormEps, options);
+      auto postAttnLn = RMSNorm({hiddenSize}, rmsNormEps, options);
+      layers_.template emplaceBack<DecoderLayerType>(std::move(attn), std::move(mlp), std::move(inputLn),
+                                                     std::move(postAttnLn));
+    }
+
+    if (tieWordEmbeddings) {
+      lmHead_.weight() = embedTokens_.weight();
+    }
+
+    registerModules({
+        {"model.embed_tokens", embedTokens_},
+        {"model.layers", layers_},
+        {"model.norm", norm_},
+        {"lm_head", lmHead_},
+    });
+  }
+
+  Tensor forward(const Tensor &inputIds) override {
+    auto x = embedTokens_(inputIds);
+    for (auto &layer : layers_) {
+      x = layer->forward(x);
+    }
+    x = norm_(x);
+    return lmHead_(x);
+  }
+
+ protected:
+  Embedding embedTokens_;
+  ModuleList layers_;
+  RMSNorm norm_;
+  Linear lmHead_;
+};
+
+}  // namespace tinytorch::nn
 
 namespace tinygpt {
 
@@ -19,25 +77,6 @@ enum class GPTModelType : int8_t {
   MISTRAL,
 };
 
-struct KVCacheStates {
-  tinytorch::TensorPair kv;
-  int64_t pastLength;
-};
-
-class KVCacheManager {
- public:
-  void create(size_t numLayers) { cache_.resize(numLayers); }
-
-  void reset() { cache_.clear(); }
-
-  KVCacheStates append(size_t layerIdx, const tinytorch::TensorPair &kv);
-
-  int64_t pastLength(size_t layerIdx) const;
-
- private:
-  std::vector<tinytorch::TensorPair> cache_;
-};
-
 class GPTModel {
  public:
   virtual ~GPTModel() = default;
@@ -46,12 +85,19 @@ class GPTModel {
 
   tinytorch::Tensor forward(const tinytorch::Tensor &inputIds) { return model()(inputIds); }
 
-  void resetCache() { kvCache_.reset(); }
+  KVCacheManager &kvCache() { return kvCache_; }
+  const KVCacheManager &kvCache() const { return kvCache_; }
 
-  virtual bool load(const std::string &path) = 0;
+  void resetCache() {
+    kvCache_.reset();
+    kvCache_.create(numLayers());
+  }
+
+  virtual bool load(const std::string &path) { return SafeTensors::load(model(), path, false); }
   virtual int64_t numLayers() = 0;
   virtual int64_t contextSize() = 0;
   virtual tinytorch::nn::Module &model() = 0;
+  virtual tinytorch::Device device() const = 0;
 
  protected:
   void init() { kvCache_.create(numLayers()); }

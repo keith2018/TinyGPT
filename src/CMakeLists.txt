@@ -34,9 +34,11 @@ set(UTF8PROC_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(${THIRD_PARTY_DIR}/utf8proc utf8proc)
 
 file(GLOB TinyGPT_src
+        "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/huggingface/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/model/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tokenizer/*.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/util/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
 

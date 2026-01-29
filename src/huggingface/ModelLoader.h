@@ -7,7 +7,7 @@
 #pragma once
 
 #include "ModelConfig.h"
-#include "Sampler.h"
+#include "engine/Sampler.h"
 #include "model/GPTModel.h"
 #include "tokenizer/Tokenizer.h"
 
