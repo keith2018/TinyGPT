@@ -131,7 +131,7 @@ int32_t ByteLevel::findIncompletePos(std::string_view str) {
 
 std::vector<std::string_view> ByteLevel::splitUTF8(std::string_view str) {
   std::vector<std::string_view> results;
-  results.reserve(str.size());
+  results.reserve((str.size() + 1) / 2);
 
   const auto* data = reinterpret_cast<const uint8_t*>(str.data());
   auto len = static_cast<utf8proc_ssize_t>(str.size());
@@ -144,7 +144,7 @@ std::vector<std::string_view> ByteLevel::splitUTF8(std::string_view str) {
       LOGE("splitUTF8 error: invalid UTF-8 at pos %zu", i);
       charLen = 1;  // skip invalid byte
     }
-    results.emplace_back(str.substr(i, charLen));
+    results.emplace_back(str.data() + i, static_cast<size_t>(charLen));
     i += charLen;
   }
   return results;

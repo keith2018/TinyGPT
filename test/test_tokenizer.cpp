@@ -240,10 +240,10 @@ TEST(TEST_tokenizer, tokenizer_batch) {
   auto decodeText = std::string("<｜begin▁of▁sentence｜>") + text;
   std::vector<int32_t> ids = {128000, 15339, 1917, 0};
 
-  auto ret = tokenizer.encodeBatch({text, text, text});
+  auto ret = tokenizer.encodeBatch(std::vector<std::string>{text, text, text});
   EXPECT_TRUE(ret == std::vector({ids, ids, ids}));
 
-  auto decodeRet = tokenizer.decodeBatch({ids, ids, ids});
+  auto decodeRet = tokenizer.decodeBatch(std::vector{ids, ids, ids});
   EXPECT_TRUE(decodeRet == std::vector({decodeText, decodeText, decodeText}));
 }
 
