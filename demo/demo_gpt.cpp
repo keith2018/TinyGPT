@@ -4,7 +4,8 @@
  *
  */
 
-#include "GPTEngine.h"
+#include "engine/GPTEngine.h"
+#include "Utils/Profiler.h"
 #include "Utils/Timer.h"
 #include "util/StringUtils.h"
 
@@ -39,7 +40,9 @@ void demo_gpt_impl(const std::string &modelDir) {
   tinytorch::Timer timer;
   timer.start();
 
+  PROFILE_START();
   auto output = engine.generateSync(INPUT_STRS);
+  PROFILE_STOP();
 
   LOGI("Generated Outputs:");
   LOGI("------------------------------------------------------------");
