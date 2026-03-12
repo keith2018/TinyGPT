@@ -20,6 +20,8 @@ Tiny C++ LLM inference implementation from scratch.
 
 ## TODO
 
+- [ ] Flash Attention
+- [ ] Distributed Inference
 - [ ] Paged Attention
 - [ ] Continuous Batching
 - [ ] CUDA Graph
