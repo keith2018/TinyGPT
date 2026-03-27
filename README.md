@@ -13,6 +13,7 @@ Tiny C++ LLM inference implementation from scratch.
 - [x] CPU/CUDA inference.
 - [x] FP32/FP16/BF16 inference.
 - [x] KV Cache
+- [x] Flash Attention: [TinyFA](https://github.com/keith2018/TinyFA)
 
 `tinygpt::tokenizer` is faster than both [HuggingFace Tokenizers](https://github.com/huggingface/tokenizers) and [OpenAI tiktoken](https://github.com/openai/tiktoken)，the encoding speed was measured using the [~/benches/tokenizer.py](https://github.com/keith2018/TinyGPT/blob/main/benches/tokenizer.py) script on a machine with an Intel(R) Xeon(R) Platinum 8255C CPU @ 2.50GHz.
 
@@ -20,7 +21,6 @@ Tiny C++ LLM inference implementation from scratch.
 
 ## TODO
 
-- [ ] Flash Attention
 - [ ] Distributed Inference
 - [ ] Paged Attention
 - [ ] Continuous Batching
