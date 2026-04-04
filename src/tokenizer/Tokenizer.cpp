@@ -60,6 +60,8 @@ bool Tokenizer::initWithConfig(const std::string& tokenizerPath, const std::stri
 
   ASSERT(!addBosToken_ || bosTokenId_ >= 0);
   ASSERT(!addEosToken_ || eosTokenId_ >= 0);
+
+  chatTemplate_ = config.chatTemplate;
   return true;
 }
 
@@ -250,9 +252,17 @@ std::string Tokenizer::decodeStream(tinytorch::ArrayView<int32_t> ids) {
   // adjust cache
   streamCacheToken_.resize(keepTokens);
 
-  auto splitPos = streamCacheStr_.size() - totalIncompleteLen;
+  auto splitPos = (totalIncompleteLen >= streamCacheStr_.size()) ? static_cast<size_t>(0)
+                                                                 : streamCacheStr_.size() - totalIncompleteLen;
   auto retStr = streamCacheStr_.substr(0, splitPos);
   streamCacheStr_ = streamCacheStr_.substr(splitPos);
+  return retStr;
+}
+
+std::string Tokenizer::decodeStreamFlush() {
+  streamCacheToken_.clear();
+  std::string retStr = std::move(streamCacheStr_);
+  streamCacheStr_.clear();
   return retStr;
 }
 
@@ -308,6 +318,16 @@ std::vector<int32_t> Tokenizer::encodeWithModel(const std::string& text, bool ad
     ids = postProcessor_->postProcess(ids, addSpecialTokens);
   }
   return ids;
+}
+
+std::string Tokenizer::applyChatTemplate(const std::vector<ChatMessage>& messages, bool addGenerationPrompt) const {
+  if (chatTemplate_.empty()) {
+    LOGE("Chat template is empty");
+    return {};
+  }
+  std::string bosToken = bosTokenId_ >= 0 ? const_cast<Tokenizer*>(this)->id2Token(bosTokenId_) : "";
+  std::string eosToken = eosTokenId_ >= 0 ? const_cast<Tokenizer*>(this)->id2Token(eosTokenId_) : "";
+  return tokenizer::applyChatTemplate(chatTemplate_, messages, addGenerationPrompt, bosToken, eosToken);
 }
 
 void Tokenizer::workerThread() {

@@ -16,6 +16,7 @@
 #include "BPE.h"
 #include "Base.h"
 #include "ByteLevel.h"
+#include "ChatTemplate.h"
 #include "Regex.h"
 #include "Split.h"
 #include "TemplateProcessing.h"
@@ -54,6 +55,9 @@ class Tokenizer {
   std::string decodeStream(const std::vector<int32_t>& ids);
   std::string decodeStream(tinytorch::ArrayView<int32_t> ids);
 
+  // flush remaining bytes in stream cache
+  std::string decodeStreamFlush();
+
   int32_t bosTokenId() const { return bosTokenId_; }
   int32_t eosTokenId() const { return eosTokenId_; }
   int32_t padTokenId() const { return padTokenId_; }
@@ -61,6 +65,10 @@ class Tokenizer {
   std::string bosTokenStr() { return bosTokenId_ < 0 ? std::string() : id2Token(bosTokenId_); }
   std::string eosTokenStr() { return eosTokenId_ < 0 ? std::string() : id2Token(eosTokenId_); }
   std::string padTokenStr() { return padTokenId_ < 0 ? std::string() : id2Token(padTokenId_); }
+
+  std::string applyChatTemplate(const std::vector<ChatMessage>& messages, bool addGenerationPrompt = true) const;
+  bool hasChatTemplate() const { return !chatTemplate_.empty(); }
+  void setChatTemplate(const std::string& tmpl) { chatTemplate_ = tmpl; }
 
  private:
   void addTokens(const ankerl::unordered_dense::map<std::string, int32_t>& tokens);
@@ -99,6 +107,9 @@ class Tokenizer {
   int32_t minAddedTokenId_ = -1;
   int32_t maxAddedTokenId_ = -1;
   std::vector<std::string> addedDecoder_;
+
+  // chat template
+  std::string chatTemplate_;
 
   // threads management
   std::vector<std::thread> threads_;
