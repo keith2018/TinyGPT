@@ -16,13 +16,13 @@ constexpr char const* TEXT_PATH = "assets/tokenizer/text/shakespeare.txt";
 constexpr char const* TOKENIZER_PATH = "assets/tokenizer/Llama-3.1-8B/tokenizer.json";
 constexpr char const* TOKENIZER_CONFIG_PATH = "assets/tokenizer/Llama-3.1-8B/tokenizer_config.json";
 
-void demo_tokenizer() {
+int main(int argc, char** argv) {
   LOGI("demo_tokenizer()");
 
   std::ifstream file(TEXT_PATH, std::ios::in | std::ios::binary | std::ios::ate);
   if (!file) {
     LOGE("Failed to open file.");
-    return;
+    return 1;
   }
 
   std::streamsize size = file.tellg();
@@ -31,7 +31,7 @@ void demo_tokenizer() {
   std::string content(size, '\0');
   if (!file.read(&content[0], size)) {
     LOGE("Failed to read file.");
-    return;
+    return 1;
   }
 
   tokenizer::Tokenizer tokenizer;
@@ -55,4 +55,6 @@ void demo_tokenizer() {
   auto timeCost = timer.elapseMillis();
   auto speed = (float)(content.size() * batch) / (float)timeCost * 1000.f / (1024 * 1024);
   LOGI("encode bytes: %lld, cost: %lld ms, %.1f MB / s", content.size() * batch, timeCost, speed);
+
+  return 0;
 }
