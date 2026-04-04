@@ -14,9 +14,11 @@ struct SamplerConfig {
   float temperature;
   int64_t topK;
   float topP;
+  float minP;
 
   // NOLINTNEXTLINE(google-explicit-constructor)
-  SamplerConfig(float t = 0.f, int64_t k = 0, float p = 1.f) : temperature(t), topK(k), topP(p) {}
+  SamplerConfig(float t = 0.f, int64_t k = 0, float tp = 1.f, float mp = 0.f)
+      : temperature(t), topK(k), topP(tp), minP(mp) {}
 };
 
 class Sampler {
@@ -33,6 +35,7 @@ class Sampler {
   bool setTemperature_;
   bool setTopK_;
   bool setTopP_;
+  bool setMinP_;
 
   bool doSample_;
 };

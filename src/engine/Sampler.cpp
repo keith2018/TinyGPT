@@ -17,7 +17,8 @@ Sampler::Sampler(const SamplerConfig& config)
       setTemperature_(config_.temperature > 0.f),
       setTopK_(config_.topK > 0),
       setTopP_(config_.topP < 1.f),
-      doSample_(setTemperature_ || setTopK_ || setTopP_) {}
+      setMinP_(config_.minP > 0.f),
+      doSample_(setTemperature_ || setTopK_ || setTopP_ || setMinP_) {}
 
 tt::Tensor Sampler::sample(const tt::Tensor& logits) {
   ASSERT(logits.dim() == 2);  // [batch, vocab_size]
@@ -61,6 +62,15 @@ tt::Tensor Sampler::sample(const tt::Tensor& logits) {
 
     l.fill_(-std::numeric_limits<float>::infinity());
     l.scatter_(-1, sortedIndices, sortedLogits);
+  }
+
+  // min p
+  if (setMinP_) {
+    auto minPProbs = tt::function::softmax(l, -1);
+    auto [maxProb, maxIdx] = tt::function::max(minPProbs, -1, true);  // [batch, 1]
+    auto threshold = maxProb * config_.minP;
+    auto minPMask = minPProbs < threshold;  // [batch, vocab]
+    l.fillMasked_(minPMask, -std::numeric_limits<float>::infinity());
   }
 
   // multinomial

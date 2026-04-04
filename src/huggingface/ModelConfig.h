@@ -81,7 +81,7 @@ struct MistralConfig : ModelConfig {
 
 struct GenerationConfig {
   int64_t bosTokenId;
-  int64_t eosTokenId;
+  std::vector<int64_t> eosTokenIds;
 
   bool doSample;
   float temperature;

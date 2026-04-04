@@ -138,7 +138,23 @@ std::unique_ptr<GenerationConfig> loadGenerationConfig(const std::string& cfgPat
 
   auto cfg = std::make_unique<GenerationConfig>();
   cfg->bosTokenId = getJsonValue<int64_t>(doc, "bos_token_id", -1);
-  cfg->eosTokenId = getJsonValue<int64_t>(doc, "eos_token_id", -1);
+
+  if (doc.HasMember("eos_token_id")) {
+    auto& val = doc["eos_token_id"];
+    if (val.IsArray()) {
+      for (auto& v : val.GetArray()) {
+        if (v.IsInt64())
+          cfg->eosTokenIds.push_back(v.GetInt64());
+        else if (v.IsInt())
+          cfg->eosTokenIds.push_back(v.GetInt());
+      }
+    } else if (val.IsInt64()) {
+      cfg->eosTokenIds.push_back(val.GetInt64());
+    } else if (val.IsInt()) {
+      cfg->eosTokenIds.push_back(val.GetInt());
+    }
+  }
+
   cfg->doSample = getJsonValue<bool>(doc, "do_sample", false);
   cfg->temperature = getJsonValue<float>(doc, "temperature", 0.f);
   cfg->topK = getJsonValue<int64_t>(doc, "top_k", 0);
