@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TinyGPT Chat</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg-primary: #1e1e2e;
+  --bg-secondary: #181825;
+  --bg-tertiary: #313244;
+  --bg-input: #24243a;
+  --text-primary: #cdd6f4;
+  --text-secondary: #a6adc8;
+  --text-muted: #6c7086;
+  --accent: #89b4fa;
+  --accent-hover: #74c7ec;
+  --user-bubble: #3b3d6b;
+  --border: #45475a;
+  --think-bg: #1a1a2e;
+  --think-border: #585b70;
+  --code-bg: #11111b;
+  --success: #a6e3a1;
+  --error: #f38ba8;
+  --warning: #f9e2af;
+  --radius: 12px;
+  --max-width: 820px;
+}
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  display: flex; flex-direction: column;
+  line-height: 1.6;
+}
+
+/* ===== Header ===== */
+.header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0; z-index: 10;
+}
+.header .logo { display: flex; align-items: center; gap: 10px; }
+.header .logo svg { width: 28px; height: 28px; fill: var(--accent); }
+.header .logo h1 { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+.header .status-area {
+  display: flex; align-items: center; gap: 12px;
+}
+.header .model-name {
+  font-size: 13px; color: var(--text-muted);
+  background: var(--bg-tertiary); padding: 4px 12px; border-radius: 20px;
+}
+
+/* API Mode Label (auto-detected, not user-selectable) */
+.mode-label {
+  font-size: 13px; color: var(--text-muted);
+  background: var(--bg-tertiary); padding: 4px 12px; border-radius: 20px;
+  display: flex; align-items: center; gap: 6px;
+}
+.mode-label .mode-icon { font-size: 12px; }
+.mode-label .mode-text { font-weight: 500; }
+
+/* Connection status indicator */
+.conn-status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; padding: 4px 12px; border-radius: 20px;
+  background: var(--bg-tertiary); cursor: default;
+  transition: all .3s;
+}
+.conn-status .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  transition: background .3s;
+}
+.conn-status.connected .dot { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.conn-status.connected { color: var(--success); }
+.conn-status.disconnected .dot { background: var(--error); box-shadow: 0 0 6px var(--error); }
+.conn-status.disconnected { color: var(--error); }
+.conn-status.connecting .dot { background: var(--warning); animation: pulse 1s infinite; }
+.conn-status.connecting { color: var(--warning); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+
+.header .actions { display: flex; gap: 8px; }
+.header .actions button {
+  background: var(--bg-tertiary); border: 1px solid var(--border);
+  color: var(--text-secondary); padding: 6px 14px; border-radius: 8px;
+  cursor: pointer; font-size: 13px; transition: all .2s;
+}
+.header .actions button:hover { background: var(--border); color: var(--text-primary); }
+
+/* ===== Settings Panel ===== */
+.settings-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.5); z-index: 100;
+  justify-content: center; align-items: center;
+}
+.settings-overlay.open { display: flex; }
+
+.settings-panel {
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: 16px; padding: 28px; width: 420px; max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  animation: slideUp .2s ease;
+}
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+
+.settings-panel h2 {
+  font-size: 18px; margin-bottom: 20px; color: var(--text-primary);
+  display: flex; align-items: center; gap: 8px;
+}
+.settings-group {
+  margin-bottom: 16px;
+}
+.settings-group label {
+  display: block; font-size: 13px; color: var(--text-secondary);
+  margin-bottom: 6px; font-weight: 500;
+}
+.settings-group .input-row {
+  display: flex; gap: 10px;
+}
+.settings-group input {
+  flex: 1; background: var(--bg-input); border: 1px solid var(--border);
+  color: var(--text-primary); padding: 10px 14px; border-radius: 8px;
+  font-size: 14px; font-family: inherit; outline: none;
+  transition: border-color .2s;
+}
+.settings-group input:focus { border-color: var(--accent); }
+.settings-group input.port-input { width: 100px; flex: none; }
+.settings-group .hint {
+  font-size: 11px; color: var(--text-muted); margin-top: 4px;
+}
+.settings-actions {
+  display: flex; gap: 10px; margin-top: 24px; justify-content: flex-end;
+}
+.settings-actions button {
+  padding: 8px 20px; border-radius: 8px; font-size: 14px;
+  cursor: pointer; border: none; transition: all .2s;
+}
+.settings-actions .btn-cancel {
+  background: var(--bg-tertiary); color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.settings-actions .btn-cancel:hover { background: var(--border); color: var(--text-primary); }
+.settings-actions .btn-save {
+  background: var(--accent); color: var(--bg-primary); font-weight: 600;
+}
+.settings-actions .btn-save:hover { background: var(--accent-hover); }
+
+.settings-test {
+  margin-top: 12px; padding: 10px 14px; border-radius: 8px;
+  font-size: 13px; display: none;
+}
+.settings-test.success { display: block; background: rgba(166,227,161,.1); color: var(--success); }
+.settings-test.error { display: block; background: rgba(243,139,168,.1); color: var(--error); }
+.settings-test.testing { display: block; background: rgba(249,226,175,.1); color: var(--warning); }
+
+/* ===== Chat Area ===== */
+.chat-container {
+  flex: 1; overflow-y: auto; padding: 20px 16px;
+  scroll-behavior: smooth;
+}
+.chat-container::-webkit-scrollbar { width: 6px; }
+.chat-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.chat-container::-webkit-scrollbar-track { background: transparent; }
+
+.messages { max-width: var(--max-width); margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+/* Welcome */
+.welcome {
+  text-align: center; padding: 60px 20px; color: var(--text-muted);
+}
+.welcome h2 { font-size: 24px; margin-bottom: 8px; color: var(--text-secondary); }
+.welcome p { font-size: 14px; }
+
+/* Message */
+.message { display: flex; gap: 12px; animation: fadeIn .3s ease; }
+.message.user { flex-direction: row-reverse; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.avatar {
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 600;
+}
+.message.user .avatar { background: var(--accent); color: var(--bg-primary); }
+.message.assistant .avatar { background: var(--bg-tertiary); color: var(--accent); }
+
+.bubble {
+  max-width: 85%; padding: 12px 16px; border-radius: var(--radius);
+  font-size: 15px; line-height: 1.7; word-break: break-word;
+}
+.message.user .bubble {
+  background: var(--user-bubble); border-bottom-right-radius: 4px;
+}
+.message.assistant .bubble {
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+
+/* ===== Think Block ===== */
+.think-block {
+  margin-bottom: 10px; border: 1px dashed var(--think-border);
+  border-radius: 8px; overflow: hidden;
+}
+.think-toggle {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; cursor: pointer;
+  background: var(--think-bg); color: var(--text-muted);
+  font-size: 13px; user-select: none; transition: background .2s;
+  border: none; width: 100%; text-align: left;
+}
+.think-toggle:hover { background: var(--bg-tertiary); }
+.think-toggle .arrow {
+  display: inline-block; transition: transform .2s;
+  font-size: 10px;
+}
+.think-toggle .arrow.open { transform: rotate(90deg); }
+.think-toggle .label { color: var(--text-muted); }
+.think-toggle .duration { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+.think-content {
+  padding: 0 12px; max-height: 0; overflow: hidden;
+  transition: max-height .3s ease, padding .3s ease;
+  background: var(--think-bg); color: var(--text-muted);
+  font-size: 14px; line-height: 1.6;
+}
+.think-content.open { max-height: 2000px; padding: 10px 12px; }
+
+/* Thinking animation */
+.thinking-indicator { display: inline-flex; gap: 4px; padding: 4px 0; }
+.thinking-indicator span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-muted); animation: blink 1.4s infinite both;
+}
+.thinking-indicator span:nth-child(2) { animation-delay: .2s; }
+.thinking-indicator span:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
+
+/* ===== Markdown Styles ===== */
+.bubble p { margin: 4px 0; }
+.bubble ul, .bubble ol { padding-left: 20px; margin: 6px 0; }
+.bubble blockquote {
+  border-left: 3px solid var(--accent); padding-left: 12px;
+  margin: 6px 0; color: var(--text-secondary);
+}
+.bubble strong { color: var(--text-primary); font-weight: 600; }
+.bubble em { color: var(--text-secondary); }
+.bubble a { color: var(--accent); text-decoration: none; }
+.bubble a:hover { text-decoration: underline; }
+
+/* Inline Code */
+.bubble code:not(pre code) {
+  background: var(--code-bg); padding: 2px 6px; border-radius: 4px;
+  font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+  font-size: 13px; color: var(--accent);
+}
+
+/* Code Block */
+.code-block { position: relative; margin: 8px 0; border-radius: 8px; overflow: hidden; }
+.code-header {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #0d0d17; padding: 6px 12px;
+  font-size: 12px; color: var(--text-muted);
+}
+.copy-btn {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 12px; padding: 2px 8px; border-radius: 4px;
+  transition: all .2s;
+}
+.copy-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.code-block pre {
+  margin: 0; padding: 12px; background: var(--code-bg);
+  overflow-x: auto; font-size: 13px; line-height: 1.5;
+}
+.code-block code {
+  font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+  color: var(--text-primary);
+}
+
+/* ===== highlight.js theme overrides ===== */
+.hljs { background: var(--code-bg) !important; color: var(--text-primary) !important; }
+
+/* ===== KaTeX overrides ===== */
+.katex-display { margin: 12px 0 !important; overflow-x: auto; overflow-y: hidden; }
+.katex { font-size: 1.05em !important; color: var(--text-primary); }
+
+/* ===== Markdown table styles ===== */
+.bubble table {
+  border-collapse: collapse; margin: 8px 0; width: 100%;
+  font-size: 14px;
+}
+.bubble th, .bubble td {
+  border: 1px solid var(--border); padding: 6px 12px; text-align: left;
+}
+.bubble th { background: var(--bg-tertiary); font-weight: 600; }
+.bubble tr:nth-child(even) { background: rgba(49,50,68,.3); }
+
+/* ===== Markdown hr ===== */
+.bubble hr {
+  border: none; border-top: 1px solid var(--border); margin: 12px 0;
+}
+
+/* ===== Task list checkbox style ===== */
+.bubble input[type="checkbox"] {
+  margin-right: 6px; accent-color: var(--accent);
+}
+
+/* ===== Input Area ===== */
+.input-area {
+  flex-shrink: 0; background: var(--bg-secondary);
+  border-top: 1px solid var(--border); padding: 16px;
+}
+.input-wrapper {
+  max-width: var(--max-width); margin: 0 auto;
+  display: flex; align-items: flex-end; gap: 10px;
+}
+.input-wrapper textarea {
+  flex: 1; background: var(--bg-input); border: 1px solid var(--border);
+  color: var(--text-primary); padding: 12px 16px; border-radius: var(--radius);
+  font-size: 15px; font-family: inherit; line-height: 1.5;
+  resize: none; outline: none; min-height: 48px; max-height: 180px;
+  transition: border-color .2s;
+}
+.input-wrapper textarea:focus { border-color: var(--accent); }
+.input-wrapper textarea::placeholder { color: var(--text-muted); }
+.send-btn {
+  width: 48px; height: 48px; border-radius: var(--radius);
+  background: var(--accent); border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s; flex-shrink: 0;
+}
+.send-btn:hover { background: var(--accent-hover); transform: scale(1.05); }
+.send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+.send-btn svg { width: 20px; height: 20px; fill: var(--bg-primary); }
+
+/* Stop button (during generation) */
+.send-btn.stop-btn {
+  background: var(--error);
+}
+.send-btn.stop-btn:hover { background: #e06080; transform: scale(1.05); }
+
+/* Stats bar under assistant messages */
+.stats-bar {
+  margin-top: 8px; padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text-muted);
+  display: flex; align-items: center; gap: 0; flex-wrap: wrap;
+  font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+  letter-spacing: -0.2px;
+}
+.stats-bar .stat-item {
+  display: inline-flex; align-items: center; gap: 3px;
+  white-space: nowrap;
+}
+.stats-bar .stat-item .stat-label { color: var(--text-muted); opacity: 0.7; margin-right: 3px; }
+.stats-bar .stat-item .stat-label::after { content: ':'; }
+.stats-bar .stat-item .stat-value { color: var(--text-secondary); font-weight: 500; }
+.stats-bar .stat-sep {
+  color: var(--border); margin: 0 8px;
+  user-select: none;
+}
+
+.input-hint {
+  max-width: var(--max-width); margin: 6px auto 0;
+  font-size: 12px; color: var(--text-muted); text-align: center;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 640px) {
+  .header { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+  .header .model-name { display: none; }
+  .chat-container { padding: 14px 10px; }
+  .bubble { max-width: 92%; padding: 10px 12px; font-size: 14px; }
+  .input-area { padding: 10px; }
+  .settings-panel { padding: 20px; }
+}
+</style>
+<!-- Third-party libs (UMD browser builds): Markdown + Code Highlight + Math -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">
+    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+    <h1>TinyGPT</h1>
+  </div>
+  <div class="status-area">
+    <div class="conn-status connecting" id="connStatus">
+      <span class="dot"></span>
+      <span class="conn-label">connecting</span>
+    </div>
+    <span class="model-name" id="modelName">--</span>
+  </div>
+  <div class="mode-label" id="modeLabel">
+    <span class="mode-icon">&#128172;</span>
+    <span class="mode-text" id="modeText">Chat</span>
+  </div>
+  <div class="actions">
+    <button onclick="openSettings()">&#9881; settings</button>
+    <button onclick="clearChat()">&#128465; clear</button>
+  </div>
+</div>
+
+<!-- Settings Overlay -->
+<div class="settings-overlay" id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
+  <div class="settings-panel">
+    <h2>&#9881; Server Settings</h2>
+    <div class="settings-group">
+      <label>Backend Host</label>
+      <div class="input-row">
+        <input type="text" id="settingsHost" placeholder="e.g. 127.0.0.1 or 192.168.1.100">
+      </div>
+      <div class="hint">IP address or hostname of the TinyGPT server</div>
+    </div>
+    <div class="settings-group">
+      <label>Backend Port</label>
+      <div class="input-row">
+        <input type="number" id="settingsPort" class="port-input" placeholder="8080" min="1" max="65535">
+      </div>
+      <div class="hint">Port number (1-65535)</div>
+    </div>
+    <div class="settings-test" id="settingsTestResult"></div>
+    <div class="settings-actions">
+      <button class="btn-cancel" onclick="testConnection()">&#128268; Test</button>
+      <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
+      <button class="btn-save" onclick="saveSettings()">Save &amp; Connect</button>
+    </div>
+  </div>
+</div>
+
+<!-- Chat -->
+<div class="chat-container" id="chatContainer">
+  <div class="messages" id="messages">
+    <div class="welcome" id="welcome">
+      <h2>&#128075; Hi, how can I help you?</h2>
+      <p>Type a message to start, supports streaming and thinking process</p>
+    </div>
+  </div>
+</div>
+
+<!-- Input -->
+<div class="input-area">
+  <div class="input-wrapper">
+    <textarea id="userInput" rows="1" placeholder="Type a message... (Enter to send, Shift+Enter for newline)" autofocus></textarea>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </div>
+  <div class="input-hint">Copyright (c) 2024-2026 keith2018 (keith@robot9.me)</div>
+</div>
+
+<script>
+// ===== State =====
+let messages = [];
+let isGenerating = false;
+let currentModelName = '';
+let apiMode = 'chat'; // 'chat' or 'completion' — auto-detected from model capabilities
+let abortController = null; // AbortController for cancelling generation
+
+// ===== Backend Config =====
+function getDefaultBackend() {
+  // Default: same origin as the page (works when served by TinyGPT_server itself)
+  return { host: location.hostname || '127.0.0.1', port: parseInt(location.port) || 8080 };
+}
+
+function loadBackendConfig() {
+  try {
+    const saved = localStorage.getItem('tinygpt_backend');
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return getDefaultBackend();
+}
+
+function saveBackendConfig(host, port) {
+  localStorage.setItem('tinygpt_backend', JSON.stringify({ host, port }));
+}
+
+function getBaseUrl() {
+  const cfg = loadBackendConfig();
+  return `http://${cfg.host}:${cfg.port}`;
+}
+
+// ===== Connection Status =====
+function setConnStatus(state, text) {
+  const el = document.getElementById('connStatus');
+  el.className = 'conn-status ' + state;
+  el.querySelector('.conn-label').textContent = text || state;
+}
+
+async function checkConnection() {
+  setConnStatus('connecting', 'connecting...');
+  try {
+    const resp = await fetch(getBaseUrl() + '/v1/models', { signal: AbortSignal.timeout(5000) });
+    const data = await resp.json();
+    if (data.data && data.data.length > 0) {
+      currentModelName = data.data[0].id;
+      document.getElementById('modelName').textContent = currentModelName;
+
+      // Auto-detect API mode from model capabilities
+      const caps = data.data[0].capabilities;
+      if (caps) {
+        const newMode = caps.chat ? 'chat' : 'completion';
+        setApiMode(newMode);
+      }
+    }
+    const cfg = loadBackendConfig();
+    setConnStatus('connected', cfg.host + ':' + cfg.port);
+    return true;
+  } catch (e) {
+    const cfg = loadBackendConfig();
+    setConnStatus('disconnected', 'disconnected');
+    document.getElementById('modelName').textContent = cfg.host + ':' + cfg.port;
+    return false;
+  }
+}
+
+// Periodic connection check
+let healthCheckTimer = null;
+function startHealthCheck() {
+  if (healthCheckTimer) clearInterval(healthCheckTimer);
+  healthCheckTimer = setInterval(checkConnection, 15000);
+}
+
+// ===== API Mode (auto-detected) =====
+function setApiMode(mode) {
+  apiMode = mode;
+  const modeText = document.getElementById('modeText');
+  const modeIcon = document.querySelector('#modeLabel .mode-icon');
+  if (mode === 'completion') {
+    modeText.textContent = 'Completion';
+    modeIcon.textContent = '\u{1F4DD}'; // 📝
+  } else {
+    modeText.textContent = 'Chat';
+    modeIcon.textContent = '\u{1F4AC}'; // 💬
+  }
+  // Update placeholder text
+  const ta = document.getElementById('userInput');
+  if (mode === 'completion') {
+    ta.placeholder = 'Enter a prompt for text completion... (Enter to send, Shift+Enter for newline)';
+  } else {
+    ta.placeholder = 'Type a message... (Enter to send, Shift+Enter for newline)';
+  }
+}
+
+// ===== Settings Panel =====
+function openSettings() {
+  const cfg = loadBackendConfig();
+  document.getElementById('settingsHost').value = cfg.host;
+  document.getElementById('settingsPort').value = cfg.port;
+  document.getElementById('settingsTestResult').className = 'settings-test';
+  document.getElementById('settingsTestResult').textContent = '';
+  document.getElementById('settingsOverlay').classList.add('open');
+}
+
+function closeSettings() {
+  document.getElementById('settingsOverlay').classList.remove('open');
+}
+
+async function testConnection() {
+  const host = document.getElementById('settingsHost').value.trim();
+  const port = parseInt(document.getElementById('settingsPort').value) || 8080;
+  const resultEl = document.getElementById('settingsTestResult');
+
+  if (!host) {
+    resultEl.className = 'settings-test error';
+    resultEl.textContent = 'Please enter a host address';
+    return;
+  }
+
+  resultEl.className = 'settings-test testing';
+  resultEl.textContent = 'Testing connection...';
+
+  try {
+    const url = `http://${host}:${port}/v1/models`;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const data = await resp.json();
+    const modelName = data.data?.[0]?.id || 'unknown';
+    resultEl.className = 'settings-test success';
+    resultEl.textContent = `Connected! Model: ${modelName}`;
+  } catch (e) {
+    resultEl.className = 'settings-test error';
+    resultEl.textContent = `Connection failed: ${e.message}`;
+  }
+}
+
+function saveSettings() {
+  const host = document.getElementById('settingsHost').value.trim();
+  const port = parseInt(document.getElementById('settingsPort').value) || 8080;
+
+  if (!host) {
+    const resultEl = document.getElementById('settingsTestResult');
+    resultEl.className = 'settings-test error';
+    resultEl.textContent = 'Please enter a host address';
+    return;
+  }
+
+  saveBackendConfig(host, port);
+  closeSettings();
+  checkConnection();
+}
+
+// ===== Init =====
+(async function init() {
+  await checkConnection();
+  startHealthCheck();
+})();
+
+// ===== Auto-resize textarea =====
+const textarea = document.getElementById('userInput');
+textarea.addEventListener('input', () => {
+  textarea.style.height = 'auto';
+  textarea.style.height = Math.min(textarea.scrollHeight, 180) + 'px';
+});
+textarea.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// ===== Stop Generation =====
+function stopGeneration() {
+  if (abortController) {
+    abortController.abort();
+  }
+}
+
+// ===== Send Button State =====
+function setSendButtonState(generating) {
+  const btn = document.getElementById('sendBtn');
+  if (generating) {
+    btn.classList.add('stop-btn');
+    btn.disabled = false;
+    btn.onclick = stopGeneration;
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="var(--bg-primary)"/></svg>';
+  } else {
+    btn.classList.remove('stop-btn');
+    btn.disabled = false;
+    btn.onclick = sendMessage;
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
+  }
+}
+
+// ===== Send Message =====
+async function sendMessage() {
+  const text = textarea.value.trim();
+  if (!text || isGenerating) return;
+
+  // Hide welcome
+  const welcome = document.getElementById('welcome');
+  if (welcome) welcome.remove();
+
+  // Add user message
+  appendUserMessage(text);
+  textarea.value = '';
+  textarea.style.height = 'auto';
+
+  // Start generation
+  isGenerating = true;
+  userHasScrolledUp = false;  // reset scroll tracking for new generation
+  abortController = new AbortController();
+  setSendButtonState(true);
+
+  const { bubbleEl, thinkEl, contentEl, statsEl } = appendAssistantMessage();
+  let fullText = '';
+  let thinkText = '';
+  let replyText = '';
+  let inThink = false;
+  let thinkDone = false;
+  let thinkStartTime = Date.now();
+
+  // Stats tracking
+  let genStartTime = null;
+  let chunkCount = 0;
+  let finalUsage = null;
+
+  try {
+    let endpoint, body;
+
+    if (apiMode === 'completion') {
+      endpoint = getBaseUrl() + '/v1/completions';
+      body = JSON.stringify({
+        model: currentModelName,
+        prompt: text,
+        stream: true
+      });
+    } else {
+      messages.push({ role: 'user', content: text });
+      endpoint = getBaseUrl() + '/v1/chat/completions';
+      body = JSON.stringify({
+        model: currentModelName,
+        messages: messages,
+        stream: true
+      });
+    }
+
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body,
+      signal: abortController.signal
+    });
+
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `HTTP ${resp.status}`);
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const payload = trimmed.slice(6);
+        if (payload === '[DONE]') continue;
+
+        try {
+          const json = JSON.parse(payload);
+
+          // Check for usage in final chunk
+          if (json.usage) {
+            finalUsage = json.usage;
+          }
+
+          // Chat mode uses delta.content, Completion mode uses choices[0].text
+          const delta = apiMode === 'completion'
+            ? (json.choices?.[0]?.text || '')
+            : (json.choices?.[0]?.delta?.content || '');
+          if (!delta) continue;
+
+          // Track stats
+          if (!genStartTime) genStartTime = Date.now();
+          chunkCount++;
+
+          fullText += delta;
+
+          // Parse <think> blocks
+          const parsed = parseThinkStream(fullText, inThink, thinkDone);
+          inThink = parsed.inThink;
+
+          if (!thinkDone && parsed.thinkDone) {
+            thinkDone = true;
+            const elapsed = ((Date.now() - thinkStartTime) / 1000).toFixed(1);
+            thinkEl.querySelector('.duration').textContent = `${elapsed}s`;
+          }
+
+          thinkText = parsed.thinkContent;
+          replyText = parsed.replyContent;
+
+          // Render
+          if (thinkText) {
+            thinkEl.style.display = 'block';
+            thinkEl.querySelector('.think-inner').innerHTML = renderMarkdown(thinkText);
+            if (inThink) {
+              thinkEl.querySelector('.think-inner').classList.add('open');
+              thinkEl.querySelector('.arrow').classList.add('open');
+            }
+          }
+          if (inThink && !thinkDone) {
+            contentEl.innerHTML = '<div class="thinking-indicator"><span></span><span></span><span></span></div>';
+          } else {
+            contentEl.innerHTML = renderMarkdown(replyText);
+          }
+
+          // Update live stats
+          if (genStartTime) {
+            const elapsed = (Date.now() - genStartTime) / 1000;
+            const speed = elapsed > 0 ? (chunkCount / elapsed).toFixed(1) : '0.0';
+            statsEl.innerHTML = statItem('tokens', chunkCount) + statSep() + statItem('speed', speed + ' tokens/s');
+            statsEl.style.display = 'flex';
+          }
+
+          scrollToBottom();
+        } catch (e) { /* skip malformed JSON */ }
+      }
+    }
+
+    // Final render
+    if (thinkText) {
+      thinkEl.style.display = 'block';
+      thinkEl.querySelector('.think-inner').innerHTML = renderMarkdown(thinkText);
+      if (thinkDone) {
+        thinkEl.querySelector('.think-inner').classList.remove('open');
+        thinkEl.querySelector('.arrow').classList.remove('open');
+      }
+    }
+    contentEl.innerHTML = renderMarkdown(replyText);
+    bindCopyButtons(bubbleEl);
+
+    // Save assistant message (only for chat mode)
+    if (apiMode === 'chat') {
+      messages.push({ role: 'assistant', content: fullText });
+    }
+
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      // User cancelled — keep whatever was generated
+      // If still in thinking phase, show thinking content in the think block
+      // and display a "stopped" hint in the reply area (not the raw <think> text)
+      if (inThink && !thinkDone) {
+        if (thinkText) {
+          thinkEl.style.display = 'block';
+          thinkEl.querySelector('.think-inner').innerHTML = renderMarkdown(thinkText);
+          // Collapse the think block and show elapsed time
+          thinkEl.querySelector('.think-inner').classList.remove('open');
+          thinkEl.querySelector('.arrow').classList.remove('open');
+          const elapsed = ((Date.now() - thinkStartTime) / 1000).toFixed(1);
+          thinkEl.querySelector('.duration').textContent = `${elapsed}s (stopped)`;
+        }
+        contentEl.innerHTML = `<span style="color:var(--text-muted)">&#9632; Generation stopped during thinking</span>`;
+      } else {
+        contentEl.innerHTML = renderMarkdown(replyText);
+        bindCopyButtons(bubbleEl);
+      }
+      if (apiMode === 'chat' && fullText) {
+        messages.push({ role: 'assistant', content: fullText });
+      }
+    } else {
+      contentEl.innerHTML = `<span style="color:var(--error)">&#9888; Request failed: ${escapeHtml(err.message)}</span>`;
+      if (apiMode === 'chat' && messages.length > 0 && messages[messages.length - 1].role === 'user') {
+        messages.pop();
+      }
+      checkConnection();
+    }
+  } finally {
+    isGenerating = false;
+    abortController = null;
+    setSendButtonState(false);
+
+    // Show final stats
+    const totalElapsed = genStartTime ? ((Date.now() - genStartTime) / 1000) : 0;
+    const speed = totalElapsed > 0 ? (chunkCount / totalElapsed).toFixed(1) : '0.0';
+    if (finalUsage) {
+      const parts = [
+        statItem('prompt', finalUsage.prompt_tokens),
+        statItem('completion', finalUsage.completion_tokens),
+        statItem('total', finalUsage.total_tokens + ' tokens'),
+        statItem('time', totalElapsed.toFixed(1) + 's'),
+        statItem('speed', speed + ' tokens/s'),
+      ];
+      statsEl.innerHTML = parts.join(statSep());
+    } else if (chunkCount > 0) {
+      const parts = [
+        statItem('tokens', chunkCount),
+        statItem('time', totalElapsed.toFixed(1) + 's'),
+        statItem('speed', speed + ' tokens/s'),
+      ];
+      statsEl.innerHTML = parts.join(statSep());
+    }
+    if (chunkCount > 0) statsEl.style.display = 'flex';
+
+    scrollToBottom();
+  }
+}
+
+// ===== Think Stream Parser =====
+function parseThinkStream(text, wasInThink, wasThinkDone) {
+  let thinkContent = '';
+  let replyContent = '';
+  let inThink = false;
+  let thinkDone = wasThinkDone;
+
+  const thinkOpenIdx = text.indexOf('<think>');
+  const thinkCloseIdx = text.indexOf('</think>');
+
+  if (thinkOpenIdx !== -1) {
+    if (thinkCloseIdx !== -1 && thinkCloseIdx > thinkOpenIdx) {
+      // Complete think block
+      thinkContent = text.substring(thinkOpenIdx + 7, thinkCloseIdx);
+      replyContent = text.substring(thinkCloseIdx + 8).trimStart();
+      inThink = false;
+      thinkDone = true;
+    } else {
+      // Still thinking
+      thinkContent = text.substring(thinkOpenIdx + 7);
+      replyContent = '';
+      inThink = true;
+    }
+  } else {
+    replyContent = text;
+  }
+
+  return { thinkContent, replyContent, inThink, thinkDone };
+}
+
+// ===== DOM Helpers =====
+function appendUserMessage(text) {
+  const el = document.createElement('div');
+  el.className = 'message user';
+  el.innerHTML = `
+    <div class="avatar">U</div>
+    <div class="bubble">${renderMarkdown(text)}</div>
+  `;
+  document.getElementById('messages').appendChild(el);
+  scrollToBottom(true);
+}
+
+function appendAssistantMessage() {
+  const el = document.createElement('div');
+  el.className = 'message assistant';
+  el.innerHTML = `
+    <div class="avatar">AI</div>
+    <div class="bubble">
+      <div class="think-block" style="display:none">
+        <button class="think-toggle" onclick="toggleThink(this)">
+          <span class="arrow">&#9654;</span>
+          <span class="label">&#128173; Thinking</span>
+          <span class="duration"></span>
+        </button>
+        <div class="think-content think-inner"></div>
+      </div>
+      <div class="reply-content">
+        <div class="thinking-indicator"><span></span><span></span><span></span></div>
+      </div>
+      <div class="stats-bar" style="display:none"></div>
+    </div>
+  `;
+  document.getElementById('messages').appendChild(el);
+  scrollToBottom(true);
+
+  const bubble = el.querySelector('.bubble');
+  const thinkEl = el.querySelector('.think-block');
+  const contentEl = el.querySelector('.reply-content');
+  const statsEl = el.querySelector('.stats-bar');
+  return { bubbleEl: bubble, thinkEl, contentEl, statsEl };
+}
+
+function toggleThink(btn) {
+  const arrow = btn.querySelector('.arrow');
+  const content = btn.nextElementSibling;
+  arrow.classList.toggle('open');
+  content.classList.toggle('open');
+}
+
+function clearChat() {
+  messages = [];
+  const msgEl = document.getElementById('messages');
+  msgEl.innerHTML = `
+    <div class="welcome" id="welcome">
+      <h2>&#128075; Hi, how can I help you?</h2>
+      <p>${apiMode === 'completion'
+        ? 'Enter a prompt for text completion (no chat history)'
+        : 'Type a message to start, supports streaming and thinking process'}</p>
+    </div>
+  `;
+}
+
+// ===== Stats Formatting =====
+function statItem(label, value) {
+  return `<span class="stat-item"><span class="stat-label">${label}</span><span class="stat-value">${value}</span></span>`;
+}
+function statSep() {
+  return `<span class="stat-sep">|</span>`;
+}
+
+// ===== Smart Auto-Scroll =====
+// Only auto-scroll if user is already near the bottom; don't fight user scrolling.
+const AUTO_SCROLL_THRESHOLD = 80; // px from bottom to consider "at bottom"
+let userHasScrolledUp = false;
+
+// Track user scroll position
+document.getElementById('chatContainer').addEventListener('scroll', () => {
+  if (!isGenerating) return; // only track during generation
+  userHasScrolledUp = !isNearBottom();
+});
+
+function isNearBottom() {
+  const container = document.getElementById('chatContainer');
+  return container.scrollHeight - container.scrollTop - container.clientHeight < AUTO_SCROLL_THRESHOLD;
+}
+
+function scrollToBottom(force = false) {
+  if (!force && userHasScrolledUp) return; // respect user's scroll position
+  const container = document.getElementById('chatContainer');
+  requestAnimationFrame(() => {
+    container.scrollTop = container.scrollHeight;
+  });
+}
+
+// ===== Markdown Renderer (marked + highlight.js + KaTeX) =====
+
+// Configure marked
+const markedRenderer = new marked.Renderer();
+
+// Custom code block renderer: wrap with header + copy button + highlight.js
+markedRenderer.code = function(code, lang) {
+  // marked v12 passes (code, lang) as separate args, or {text,lang} object
+  if (typeof code === 'object') { lang = code.lang; code = code.text; }
+  lang = lang || '';
+  const langLabel = lang || 'code';
+  const id = 'code-' + Math.random().toString(36).substr(2, 8);
+  let highlighted;
+  try {
+    highlighted = lang && hljs.getLanguage(lang)
+      ? hljs.highlight(code, { language: lang }).value
+      : hljs.highlightAuto(code).value;
+  } catch (e) {
+    highlighted = escapeHtml(code);
+  }
+  return `<div class="code-block"><div class="code-header"><span>${escapeHtml(langLabel)}</span><button class="copy-btn" data-code-id="${id}">Copy</button></div><pre><code id="${id}" class="hljs">${highlighted}</code></pre></div>`;
+};
+
+// Custom inline code
+markedRenderer.codespan = function(code) {
+  if (typeof code === 'object') code = code.text;
+  return `<code>${escapeHtml(code)}</code>`;
+};
+
+marked.setOptions({
+  renderer: markedRenderer,
+  gfm: true,
+  breaks: true,
+});
+
+// KaTeX rendering helper
+function renderKaTeX(text) {
+  if (!window.katex) return text;
+
+  // Block math: $$ ... $$ (multiline)
+  text = text.replace(/\$\$([\s\S]+?)\$\$/g, (match, math) => {
+    try {
+      return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false });
+    } catch (e) { return match; }
+  });
+
+  // Block math: \[ ... \] (multiline)
+  text = text.replace(/\\\[([\s\S]+?)\\\]/g, (match, math) => {
+    try {
+      return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false });
+    } catch (e) { return match; }
+  });
+
+  // Inline math: $..$ (single line, not greedy, avoid $$)
+  text = text.replace(/(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)/g, (match, math) => {
+    try {
+      return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
+    } catch (e) { return match; }
+  });
+
+  // Inline math: \( ... \)
+  text = text.replace(/\\\((.+?)\\\)/g, (match, math) => {
+    try {
+      return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
+    } catch (e) { return match; }
+  });
+
+  return text;
+}
+
+// Protect code blocks & inline code from KaTeX processing
+function renderMarkdown(text) {
+  if (!text) return '';
+
+  // Step 1: Extract code blocks and inline code to protect from KaTeX
+  const codeBlocks = [];
+  let protected_ = text;
+
+  // Protect fenced code blocks
+  protected_ = protected_.replace(/```[\s\S]*?```/g, (match) => {
+    const idx = codeBlocks.length;
+    codeBlocks.push(match);
+    return `\x00CODEBLOCK${idx}\x00`;
+  });
+
+  // Protect inline code
+  protected_ = protected_.replace(/`[^`]+`/g, (match) => {
+    const idx = codeBlocks.length;
+    codeBlocks.push(match);
+    return `\x00CODEBLOCK${idx}\x00`;
+  });
+
+  // Step 2: Render KaTeX on the unprotected text
+  protected_ = renderKaTeX(protected_);
+
+  // Step 3: Restore code blocks
+  protected_ = protected_.replace(/\x00CODEBLOCK(\d+)\x00/g, (_, idx) => codeBlocks[parseInt(idx)]);
+
+  // Step 4: Render markdown with marked
+  let html = marked.parse(protected_);
+
+  return html;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ===== Copy code button =====
+function bindCopyButtons(container) {
+  container.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const codeId = btn.getAttribute('data-code-id');
+      const codeEl = document.getElementById(codeId);
+      if (!codeEl) return;
+      try {
+        await navigator.clipboard.writeText(codeEl.textContent);
+        btn.textContent = '✓ Copied';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+      } catch {
+        btn.textContent = 'Failed';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+      }
+    });
+  });
+}
+
+// ===== Keyboard shortcut: Escape to close settings =====
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeSettings();
+});
+</script>
+</body>
+</html>
