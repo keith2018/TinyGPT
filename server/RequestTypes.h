@@ -6,8 +6,6 @@
 
 #pragma once
 
-#include <functional>
-#include <future>
 #include <string>
 #include <vector>
 
@@ -25,7 +23,11 @@ struct ServerConfig {
   tinytorch::DType dtype = tinytorch::DType::BFloat16;
 
   SamplerConfig samplerConfig = {0.7f, 0, 0.9f, 0.0f};
-  int64_t maxNewTokens = 4096;
+  int32_t maxNewTokens = 4096;
+  int32_t maxBatchTokens = 8192;
+
+  int32_t prefillChunkSize = 512;
+  int32_t maxGraphBatch = 128;
 
   std::string chatTemplate;
 };
@@ -35,23 +37,12 @@ struct InferenceRequest {
   float temperature;
   float topP;
   float minP = 0.0f;
-  int64_t maxTokens;
+  int32_t maxTokens;
   bool stream = false;
 
   std::vector<std::string> stopStrings;
   std::vector<int32_t> stopTokenIds;
   bool includeStopStrInOutput = false;
-};
-
-struct InferenceTask {
-  InferenceRequest request;
-
-  // non-stream
-  std::promise<GPTOutput> promise;
-
-  // stream
-  std::function<bool(const std::string& chunk)> streamCallback;
-  std::function<void(bool success, FinishReason reason)> streamDone;
 };
 
 }  // namespace tinygpt::server

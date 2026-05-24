@@ -105,7 +105,7 @@ void parseCommonInferenceParams(const rj::Document& reqDoc, InferenceRequest& in
   if (reqDoc.HasMember("max_tokens") && reqDoc["max_tokens"].IsInt64()) {
     inferReq.maxTokens = reqDoc["max_tokens"].GetInt64();
   }
-  // max_completion_tokens as alias for max_tokens (OpenAI compatibility)
+  // max_completion_tokens as alias for max_tokens
   if (reqDoc.HasMember("max_completion_tokens") && reqDoc["max_completion_tokens"].IsInt64()) {
     inferReq.maxTokens = reqDoc["max_completion_tokens"].GetInt64();
   }

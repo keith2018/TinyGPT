@@ -64,7 +64,7 @@ bool SafeTensors::save(tt::nn::Module& module, const std::string& path) {
   rapidjson::Document headerDoc(rapidjson::kObjectType);
   auto& allocator = headerDoc.GetAllocator();
 
-  size_t offset = 0;
+  uint64_t offset = 0;
   for (const auto& [name, tensor] : namedStates) {
     rapidjson::Value tensorInfo(rapidjson::kObjectType);
 
@@ -79,10 +79,10 @@ bool SafeTensors::save(tt::nn::Module& module, const std::string& path) {
     tensorInfo.AddMember("dtype", rapidjson::Value(toTypeString(tensor->dtype()).c_str(), allocator), allocator);
 
     // data_offsets
-    size_t tensorSize = tensor->numel() * dtypeSize(tensor->dtype());
+    uint64_t tensorSize = static_cast<uint64_t>(tensor->numel()) * dtypeSize(tensor->dtype());
     rapidjson::Value offsets_arr(rapidjson::kArrayType);
-    offsets_arr.PushBack(static_cast<uint64_t>(offset), allocator);
-    offsets_arr.PushBack(static_cast<uint64_t>(offset + tensorSize), allocator);
+    offsets_arr.PushBack(offset, allocator);
+    offsets_arr.PushBack(offset + tensorSize, allocator);
     tensorInfo.AddMember("data_offsets", offsets_arr, allocator);
 
     headerDoc.AddMember(rapidjson::Value(name.c_str(), allocator), tensorInfo, allocator);
@@ -94,8 +94,8 @@ bool SafeTensors::save(tt::nn::Module& module, const std::string& path) {
   headerDoc.Accept(writer);
   std::string headerStr = sb.GetString();
 
-  size_t headerLen = headerStr.size();
-  size_t alignedHeaderLen = ((headerLen + 7) / 8) * 8;
+  uint64_t headerLen = headerStr.size();
+  uint64_t alignedHeaderLen = ((headerLen + 7) / 8) * 8;
   headerStr.resize(alignedHeaderLen, ' ');
 
   std::ofstream ofs(path, std::ios::binary);
@@ -108,7 +108,7 @@ bool SafeTensors::save(tt::nn::Module& module, const std::string& path) {
   ofs.write(headerStr.data(), static_cast<std::streamsize>(headerStr.size()));
 
   for (const auto& [name, tensor] : namedStates) {
-    size_t tensorSize = tensor->numel() * dtypeSize(tensor->dtype());
+    uint64_t tensorSize = static_cast<uint64_t>(tensor->numel()) * dtypeSize(tensor->dtype());
 
     if (tensor->device().isCpu()) {
       ofs.write(static_cast<const char*>(tensor->dataPtr<>()), static_cast<std::streamsize>(tensorSize));
@@ -201,10 +201,10 @@ bool SafeTensors::loadInternal(tt::nn::Module& module, const std::string& path, 
     }
 
     // data_offsets
-    size_t start = info["data_offsets"][0].GetUint64();
-    size_t end = info["data_offsets"][1].GetUint64();
-    size_t nbytes = end - start;
-    size_t tensorSize = tensor->numel() * dtypeSize(tensor->dtype());
+    uint64_t start = info["data_offsets"][0].GetUint64();
+    uint64_t end = info["data_offsets"][1].GetUint64();
+    uint64_t nbytes = end - start;
+    uint64_t tensorSize = static_cast<uint64_t>(tensor->numel()) * dtypeSize(tensor->dtype());
     if (nbytes != tensorSize) {
       LOGE("size not equal for tensor: %s", name.c_str());
       success = false;

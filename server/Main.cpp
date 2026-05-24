@@ -31,6 +31,9 @@ static void printUsage(const char* progName) {
   LOGI("  --host <addr>      Server host address (default: 0.0.0.0)");
   LOGI("  --port <port>      Server port (default: 8080)");
   LOGI("  --max-tokens <n>   Max new tokens per request (default: 4096)");
+  LOGI("  --max-batch-tokens <n>  Max tokens per batch step (default: 8192)");
+  LOGI("  --prefill-chunk-size <n>  Max prefill tokens per step per seq (default: 512)");
+  LOGI("  --max-graph-batch <n>  Max batch size for CUDA Graph capture (default: 64)");
   LOGI("  --temperature <f>  Sampling temperature (default: 0.7)");
   LOGI("  --top-p <f>        Top-p sampling (default: 0.9)");
   LOGI("  --min-p <f>        Min-p sampling (default: 0.0)");
@@ -42,6 +45,10 @@ static void printUsage(const char* progName) {
 int main(int argc, char** argv) {
   ServerConfig config;
   bool hasModel = false;
+
+  auto parseInt = [](const char* s, auto& dst) {
+    dst = static_cast<std::remove_reference_t<decltype(dst)>>(std::strtoll(s, nullptr, 10));
+  };
 
   for (int i = 1; i < argc; i++) {
     std::string arg = argv[i];
@@ -55,9 +62,15 @@ int main(int argc, char** argv) {
     } else if (arg == "--host" && i + 1 < argc) {
       config.host = argv[++i];
     } else if (arg == "--port" && i + 1 < argc) {
-      config.port = std::atoi(argv[++i]);
+      parseInt(argv[++i], config.port);
     } else if (arg == "--max-tokens" && i + 1 < argc) {
-      config.maxNewTokens = std::atoll(argv[++i]);
+      parseInt(argv[++i], config.maxNewTokens);
+    } else if (arg == "--max-batch-tokens" && i + 1 < argc) {
+      parseInt(argv[++i], config.maxBatchTokens);
+    } else if (arg == "--prefill-chunk-size" && i + 1 < argc) {
+      parseInt(argv[++i], config.prefillChunkSize);
+    } else if (arg == "--max-graph-batch" && i + 1 < argc) {
+      parseInt(argv[++i], config.maxGraphBatch);
     } else if (arg == "--temperature" && i + 1 < argc) {
       config.samplerConfig.temperature = std::strtof(argv[++i], nullptr);
     } else if (arg == "--top-p" && i + 1 < argc) {
@@ -68,7 +81,6 @@ int main(int argc, char** argv) {
       config.webDir = argv[++i];
     } else if (arg == "--chat-template" && i + 1 < argc) {
       std::string val = argv[++i];
-      // If the value looks like a file path, read its contents
       bool isFile = false;
       auto dotPos = val.rfind('.');
       if (dotPos != std::string::npos) {

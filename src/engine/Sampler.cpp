@@ -6,76 +6,19 @@
 
 #include "Sampler.h"
 
-#include "Functions.h"
-
-namespace tt = tinytorch;
-
 namespace tinygpt {
 
-Sampler::Sampler(const SamplerConfig& config)
-    : config_(config),
-      setTemperature_(config_.temperature > 0.f),
-      setTopK_(config_.topK > 0),
-      setTopP_(config_.topP < 1.f),
-      setMinP_(config_.minP > 0.f),
-      doSample_(setTemperature_ || setTopK_ || setTopP_ || setMinP_) {}
-
-tt::Tensor Sampler::sample(const tt::Tensor& logits) {
-  ASSERT(logits.dim() == 2);  // [batch, vocab_size]
-
-  if (!doSample_) {
-    // greedy
-    return tt::function::argmax(logits, -1, true);
-  }
-
-  tt::Tensor l = logits;
-
-  // temperature
-  if (setTemperature_) {
-    l = l / config_.temperature;
-  }
-
-  // top k
-  if (setTopK_) {
-    auto topK = std::min(config_.topK, logits.size(-1));
-    auto [topkLogits, topkIndices] = tt::function::topk(l, topK, -1);
-
-    l.fill_(-std::numeric_limits<float>::infinity());
-    l.scatter_(-1, topkIndices, topkLogits);
-  }
-
-  // top p
-  if (setTopP_) {
-    auto [sortedLogits, sortedIndices] = tt::function::sort(l, -1, true);
-    auto probs = tt::function::softmax(sortedLogits, -1);
-    auto cumulativeProbs = tt::function::cumsum(probs, -1);
-    auto sortedMask = cumulativeProbs <= config_.topP;
-
-    auto firstIndices = tt::Tensor::zeros({sortedMask.size(0), 1}, sortedMask.options().indices());
-    auto firstMask = tt::function::scatter(tt::Tensor::zerosLike(sortedMask, sortedMask.options()), -1, firstIndices,
-                                           tt::Tensor::fullLike(firstIndices, true, sortedMask.options()));
-    sortedMask = sortedMask | firstMask;
-
-    // TODO sortedMask.indexPut_({Slice(), 0}, true);
-
-    sortedLogits.fillMasked_(~sortedMask, -std::numeric_limits<float>::infinity());
-
-    l.fill_(-std::numeric_limits<float>::infinity());
-    l.scatter_(-1, sortedIndices, sortedLogits);
-  }
-
-  // min p
-  if (setMinP_) {
-    auto minPProbs = tt::function::softmax(l, -1);
-    auto [maxProb, maxIdx] = tt::function::max(minPProbs, -1, true);  // [batch, 1]
-    auto threshold = maxProb * config_.minP;
-    auto minPMask = minPProbs < threshold;  // [batch, vocab]
-    l.fillMasked_(minPMask, -std::numeric_limits<float>::infinity());
-  }
-
-  // multinomial
-  auto probs = tt::function::softmax(l, -1);
-  return tt::function::multinomial(probs, 1);
+kernel::SamplingParams toKernelParams(const SamplerConfig& cfg) {
+  kernel::SamplingParams p;
+  p.temperature = cfg.temperature;
+  p.topK = (cfg.topK > 0) ? cfg.topK : 0;
+  p.topP = (cfg.topP < 1.f && cfg.topP > 0.f) ? cfg.topP : 1.f;
+  p.minP = (cfg.minP > 0.f) ? cfg.minP : 0.f;
+  p.seed = cfg.seed;
+  return p;
 }
+
+Sampler::Sampler(const SamplerConfig& config)
+    : config_(config), params_(toKernelParams(config)), doSample_(!kernel::isGreedy(params_)) {}
 
 }  // namespace tinygpt

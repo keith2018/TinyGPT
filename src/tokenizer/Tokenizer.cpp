@@ -125,12 +125,12 @@ std::vector<int32_t> Tokenizer::encode(const std::string& text, bool allowAddedT
   return result;
 }
 
-std::vector<std::vector<int32_t>> Tokenizer::encodeBatch(const std::vector<std::string>& texts, uint32_t numThreads,
+std::vector<std::vector<int32_t>> Tokenizer::encodeBatch(const std::vector<std::string>& texts, int32_t numThreads,
                                                          bool allowAddedTokens) {
   return encodeBatch(tinytorch::ArrayView(texts), numThreads, allowAddedTokens);
 }
 
-std::vector<std::vector<int32_t>> Tokenizer::encodeBatch(tinytorch::ArrayView<std::string> texts, uint32_t numThreads,
+std::vector<std::vector<int32_t>> Tokenizer::encodeBatch(tinytorch::ArrayView<std::string> texts, int32_t numThreads,
                                                          bool allowAddedTokens) {
   std::vector<std::vector<int32_t>> results(texts.size());
   parallelFor<std::string, std::vector<int32_t>>(
@@ -138,11 +138,11 @@ std::vector<std::vector<int32_t>> Tokenizer::encodeBatch(tinytorch::ArrayView<st
   return results;
 }
 
-std::string Tokenizer::decode(const std::vector<int32_t>& ids, uint32_t offset) {
+std::string Tokenizer::decode(const std::vector<int32_t>& ids, size_t offset) {
   return decode(tinytorch::ArrayView(ids), offset);
 }
 
-std::string Tokenizer::decode(tinytorch::ArrayView<int32_t> ids, uint32_t offset) {
+std::string Tokenizer::decode(tinytorch::ArrayView<int32_t> ids, size_t offset) {
   std::vector<std::string> pieces;
   pieces.reserve(ids.size() - offset);
 
@@ -163,7 +163,7 @@ std::string Tokenizer::decode(tinytorch::ArrayView<int32_t> ids, uint32_t offset
   return ret;
 }
 
-std::vector<std::string> Tokenizer::decodeBatch(const std::vector<std::vector<int32_t>>& ids, uint32_t numThreads) {
+std::vector<std::string> Tokenizer::decodeBatch(const std::vector<std::vector<int32_t>>& ids, int32_t numThreads) {
   std::vector<tinytorch::ArrayView<int32_t>> views;
   views.reserve(ids.size());
   for (const auto& v : ids) {
@@ -173,20 +173,20 @@ std::vector<std::string> Tokenizer::decodeBatch(const std::vector<std::vector<in
 }
 
 std::vector<std::string> Tokenizer::decodeBatch(tinytorch::ArrayView<tinytorch::ArrayView<int32_t>> ids,
-                                                uint32_t numThreads) {
+                                                int32_t numThreads) {
   std::vector<std::string> results(ids.size());
   parallelFor<tinytorch::ArrayView<int32_t>, std::string>(
       ids, results, [&](tinytorch::ArrayView<int32_t> v) { return decode(v, 0); }, numThreads);
   return results;
 }
 
-std::vector<std::string> Tokenizer::decodeBatch(const std::vector<int32_t>& ids, uint32_t batch, uint32_t offset,
-                                                uint32_t numThreads) {
+std::vector<std::string> Tokenizer::decodeBatch(const std::vector<int32_t>& ids, size_t batch, size_t offset,
+                                                int32_t numThreads) {
   return decodeBatch(tinytorch::ArrayView(ids), batch, offset, numThreads);
 }
 
-std::vector<std::string> Tokenizer::decodeBatch(tinytorch::ArrayView<int32_t> ids, uint32_t batch, uint32_t offset,
-                                                uint32_t numThreads) {
+std::vector<std::string> Tokenizer::decodeBatch(tinytorch::ArrayView<int32_t> ids, size_t batch, size_t offset,
+                                                int32_t numThreads) {
   ASSERT(ids.size() % batch == 0);
   auto idsLength = ids.size() / batch;
   std::vector<std::string> results(batch);
@@ -201,9 +201,11 @@ std::vector<std::string> Tokenizer::decodeBatch(tinytorch::ArrayView<int32_t> id
   return results;
 }
 
-std::string Tokenizer::decodeStream(const std::vector<int32_t>& ids) { return decodeStream(tinytorch::ArrayView(ids)); }
+std::string Tokenizer::decodeStream(const std::vector<int32_t>& ids, StreamState& state) {
+  return decodeStream(tinytorch::ArrayView(ids), state);
+}
 
-std::string Tokenizer::decodeStream(tinytorch::ArrayView<int32_t> ids) {
+std::string Tokenizer::decodeStream(tinytorch::ArrayView<int32_t> ids, StreamState& state) {
   size_t totalNewLen = 0;
   std::vector<std::string> newTokens;
   newTokens.reserve(ids.size());
@@ -216,27 +218,27 @@ std::string Tokenizer::decodeStream(tinytorch::ArrayView<int32_t> ids) {
   }
 
   // add to cache
-  streamCacheToken_.reserve(streamCacheToken_.size() + ids.size());
-  streamCacheStr_.reserve(streamCacheStr_.size() + totalNewLen);
+  state.tokens.reserve(state.tokens.size() + ids.size());
+  state.bytes.reserve(state.bytes.size() + totalNewLen);
   for (size_t i = 0; i < ids.size(); i++) {
-    streamCacheToken_.push_back({ids[i], newTokens[i].size()});
-    streamCacheStr_ += newTokens[i];
+    state.tokens.push_back({ids[i], static_cast<int32_t>(newTokens[i].size())});
+    state.bytes += newTokens[i];
   }
 
   // check utf8 complete
-  auto incompletePos = ByteLevel::findIncompletePos(streamCacheStr_);
-  if (incompletePos < 0) {
-    streamCacheToken_.clear();
-    std::string retStr = std::move(streamCacheStr_);
-    streamCacheStr_.clear();
+  auto incompletePos = ByteLevel::findIncompletePos(state.bytes);
+  if (!incompletePos.has_value()) {
+    state.tokens.clear();
+    std::string retStr = std::move(state.bytes);
+    state.bytes.clear();
     return retStr;
   }
 
-  size_t incompleteLen = streamCacheStr_.size() - incompletePos;
+  size_t incompleteLen = state.bytes.size() - *incompletePos;
   size_t totalIncompleteLen = 0;
-  auto keepTokens = static_cast<int32_t>(streamCacheToken_.size());
+  auto keepTokens = static_cast<int32_t>(state.tokens.size());
   while (keepTokens > 0) {
-    totalIncompleteLen += streamCacheToken_[keepTokens - 1].len;
+    totalIncompleteLen += state.tokens[keepTokens - 1].len;
     if (totalIncompleteLen >= incompleteLen) {
       break;
     }
@@ -244,25 +246,25 @@ std::string Tokenizer::decodeStream(tinytorch::ArrayView<int32_t> ids) {
   }
 
   if (keepTokens <= 0) {
-    streamCacheToken_.clear();
-    streamCacheStr_.clear();
+    state.tokens.clear();
+    state.bytes.clear();
     return {};
   }
 
   // adjust cache
-  streamCacheToken_.resize(keepTokens);
+  state.tokens.resize(keepTokens);
 
-  auto splitPos = (totalIncompleteLen >= streamCacheStr_.size()) ? static_cast<size_t>(0)
-                                                                 : streamCacheStr_.size() - totalIncompleteLen;
-  auto retStr = streamCacheStr_.substr(0, splitPos);
-  streamCacheStr_ = streamCacheStr_.substr(splitPos);
+  auto splitPos =
+      (totalIncompleteLen >= state.bytes.size()) ? static_cast<size_t>(0) : state.bytes.size() - totalIncompleteLen;
+  auto retStr = state.bytes.substr(0, splitPos);
+  state.bytes = state.bytes.substr(splitPos);
   return retStr;
 }
 
-std::string Tokenizer::decodeStreamFlush() {
-  streamCacheToken_.clear();
-  std::string retStr = std::move(streamCacheStr_);
-  streamCacheStr_.clear();
+std::string Tokenizer::decodeStreamFlush(StreamState& state) {
+  state.tokens.clear();
+  std::string retStr = std::move(state.bytes);
+  state.bytes.clear();
   return retStr;
 }
 
@@ -347,15 +349,16 @@ void Tokenizer::workerThread() {
 
 template <typename Input, typename Output, typename Func>
 void Tokenizer::parallelFor(tinytorch::ArrayView<Input> inputs, std::vector<Output>& outputs, Func func,
-                            uint32_t numThreads) {
+                            int32_t numThreads) {
   size_t n = inputs.size();
   if (n == 0) {
     return;
   }
+  ASSERT(numThreads > 0);
 
   static auto maxThreads = std::thread::hardware_concurrency();
-  numThreads = std::min<uint32_t>(numThreads, maxThreads);
-  numThreads = std::min<uint32_t>(numThreads, n);
+  numThreads = std::min<int32_t>(numThreads, static_cast<int32_t>(maxThreads));
+  numThreads = std::min<int32_t>(numThreads, static_cast<int32_t>(n));
 
   {
     // init threads
@@ -363,8 +366,8 @@ void Tokenizer::parallelFor(tinytorch::ArrayView<Input> inputs, std::vector<Outp
     if (stop_) {
       return;
     }
-    if (threads_.size() < numThreads) {
-      for (uint32_t i = threads_.size(); i < numThreads; i++) {
+    if (static_cast<int32_t>(threads_.size()) < numThreads) {
+      for (auto i = static_cast<int32_t>(threads_.size()); i < numThreads; i++) {
         threads_.emplace_back(&Tokenizer::workerThread, this);
       }
     }

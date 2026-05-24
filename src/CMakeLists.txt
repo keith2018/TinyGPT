@@ -9,6 +9,13 @@ endif ()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# CUDA (required)
+find_package(CUDAToolkit REQUIRED)
+enable_language(CUDA)
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+add_definitions(-DUSE_CUDA)
+
 if (${TINYGPT_BUILD_PYBINDING})
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
     set(BUILD_SHARED_LIBS OFF)
@@ -41,6 +48,11 @@ set(UTF8PROC_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
 set(UTF8PROC_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(${THIRD_PARTY_DIR}/utf8proc utf8proc)
 
+# TinyFA
+set(TFA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(TFA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_subdirectory(${THIRD_PARTY_DIR}/TinyFA TinyFA)
+
 file(GLOB TinyGPT_src
         "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/huggingface/*.cpp"
@@ -50,8 +62,14 @@ file(GLOB TinyGPT_src
         "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
 
-add_library(${PROJECT_NAME} STATIC ${TinyGPT_src})
-target_link_libraries(${PROJECT_NAME} TinyTorch_lib pcre2-8 utf8proc)
+# CUDA kernel sources
+file(GLOB TinyGPT_cu
+        "${CMAKE_CURRENT_SOURCE_DIR}/kernel/*.cu"
+)
+
+add_library(${PROJECT_NAME} STATIC ${TinyGPT_src} ${TinyGPT_cu})
+set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES native)
+target_link_libraries(${PROJECT_NAME} TinyTorch_lib TinyFA::tinyfa pcre2-8 utf8proc)
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${THIRD_PARTY_DIR}/pcre2/src

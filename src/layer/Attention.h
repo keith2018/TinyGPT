@@ -6,9 +6,12 @@
 
 #pragma once
 
-#include "Functions.h"
 #include "Modules.h"
+#include "engine/ForwardContext.h"
+#include "engine/PagedKVCache.h"
+#include "kernel/AttentionOps.h"
 #include "layer/Linear.h"
+#include "layer/RoPE.h"
 
 namespace tinytorch::nn {
 
@@ -23,25 +26,22 @@ struct AttentionConfig {
 
 class Attention : public Module {
  public:
-  Attention(tinygpt::KVCacheManager *kvCache, size_t layerIdx, const AttentionConfig &config, RoPE &&rope,
-            Options options = {})
-      : kvCache_(kvCache),
-        layerIdx_(layerIdx),
+  Attention(size_t layerIdx, const AttentionConfig &config, RoPE &&rope, Options options = {})
+      : layerIdx_(layerIdx),
         numHeads_(config.numHeads),
         headDim_(config.headDim),
         numKvHeads_(config.numKvHeads),
         qDim_(config.numHeads * config.headDim),
         kvDim_(config.numKvHeads * config.headDim),
         qkvProj_(MergedLinear(config.hiddenSize, {qDim_, kvDim_, kvDim_}, config.qkvBias, options)),
-        oProj_(Linear(qDim_, config.hiddenSize, config.oBias, options)),
+        oProj_(GemvLinear(qDim_, config.hiddenSize, config.oBias, options)),
         rope_(std::move(rope)) {
     ASSERT(config.numHeads % config.numKvHeads == 0);
     registerSubModules();
   }
 
   Attention(Attention &&other) noexcept
-      : kvCache_(other.kvCache_),
-        layerIdx_(other.layerIdx_),
+      : layerIdx_(other.layerIdx_),
         numHeads_(other.numHeads_),
         headDim_(other.headDim_),
         numKvHeads_(other.numKvHeads_),
@@ -69,49 +69,44 @@ class Attention : public Module {
 
  public:
   Tensor forward(const Tensor &input) override {
+    auto *ctx = tinygpt::ForwardContext::current();
+    ASSERT(ctx != nullptr && ctx->pagedCache != nullptr);
+
     rope_.to(input.device());
 
-    auto batchSize = input.shape(0);
-    auto seqLen = input.shape(1);
+    auto total = input.size(0);
 
-    // qkv project
-    auto [queries, keys, values] = projectQKV(input, batchSize, seqLen);
+    auto [queries, keys, values] = projectQKV(input, total);
 
-    // rope
-    int64_t pastLength = kvCache_->pastLength(layerIdx_, 1);
-    queries = rope_(queries, pastLength, QKVLayout::BSHD);
-    keys = rope_(keys, pastLength, QKVLayout::BSHD);
+    // rope for Q
+    queries = rope_.apply(queries, ctx->positions);
 
-    // attn
-    auto attnOutput = computeAttention(queries, keys, values, batchSize, seqLen);
+    // fused RoPE(K) + scatter K,V to paged cache
+    auto &kPool = ctx->pagedCache->kPool(layerIdx_);
+    auto &vPool = ctx->pagedCache->vPool(layerIdx_);
+    tinygpt::kernel::ropeScatterKVToCache(keys, values, kPool, vPool, ctx->slotMapping, ctx->pageSize, rope_.cache(),
+                                          ctx->positions);
+
+    // paged flash attention
+    auto attnOutput = tinygpt::kernel::flashAttentionPagedVarLen(
+        queries, kPool, vPool, ctx->cuSeqLensQ, ctx->cuSeqLensKV, ctx->blockTable, ctx->maxSeqLenQ, ctx->maxSeqLenKV,
+        ctx->pageSize, ctx->maxBlocksPerSeq, /*isCausal=*/true, ctx->tmpO, ctx->tmpLse);
     ASSERT(attnOutput.defined());
 
-    // o project
-    return oProj_(attnOutput);
+    // output projection (packed)
+    return oProj_(attnOutput.reshape({total, qDim_}));
   }
 
  protected:
-  virtual std::tuple<Tensor, Tensor, Tensor> projectQKV(const Tensor &input, int64_t batchSize, int64_t seqLen) {
+  virtual std::tuple<Tensor, Tensor, Tensor> projectQKV(const Tensor &input, int64_t totalTokens) {
     auto qkv = qkvProj_(input);
     auto qkvSplit = qkv.split({qDim_, kvDim_, kvDim_}, -1);
-    auto queries = qkvSplit[0].view({batchSize, seqLen, numHeads_, headDim_});
-    auto keys = qkvSplit[1].view({batchSize, seqLen, numKvHeads_, headDim_});
-    auto values = qkvSplit[2].view({batchSize, seqLen, numKvHeads_, headDim_});
+    auto queries = qkvSplit[0].view({totalTokens, numHeads_, headDim_});
+    auto keys = qkvSplit[1].view({totalTokens, numKvHeads_, headDim_});
+    auto values = qkvSplit[2].view({totalTokens, numKvHeads_, headDim_});
     return {queries, keys, values};
   }
 
-  Tensor computeAttention(const Tensor &queries, const Tensor &keys, const Tensor &values, int64_t batchSize,
-                          int64_t seqLen) {
-    // BSHD: seqLenDim = 1
-    auto kvStates = kvCache_->append(layerIdx_, {keys, values}, 1);
-
-    bool isCausal = (kvStates.pastLength == 0);
-    auto attnOutput = function::flashAttention(queries, kvStates.kv.first, kvStates.kv.second, isCausal);
-
-    return attnOutput.reshape({batchSize, seqLen, qDim_});
-  }
-
-  tinygpt::KVCacheManager *kvCache_;
   size_t layerIdx_;
   int64_t numHeads_;
   int64_t headDim_;
@@ -120,29 +115,66 @@ class Attention : public Module {
   int64_t kvDim_;
 
   MergedLinear qkvProj_;
-  Linear oProj_;
+  GemvLinear oProj_;
 
   RoPE rope_;
 };
 
 class AttentionWithQKNorm : public Attention {
  public:
-  AttentionWithQKNorm(tinygpt::KVCacheManager *kvCache, size_t layerIdx, const AttentionConfig &config, RoPE &&rope,
-                      float rmsNormEps, Options options = {})
-      : Attention(kvCache, layerIdx, config, std::move(rope), options),
+  AttentionWithQKNorm(size_t layerIdx, const AttentionConfig &config, RoPE &&rope, float rmsNormEps,
+                      Options options = {})
+      : Attention(layerIdx, config, std::move(rope), options),
+        rmsNormEps_(rmsNormEps),
         qNorm_(RMSNorm({config.headDim}, rmsNormEps, options)),
         kNorm_(RMSNorm({config.headDim}, rmsNormEps, options)) {
     registerQkNorm_Modules();
   }
 
   AttentionWithQKNorm(AttentionWithQKNorm &&other) noexcept
-      : Attention(std::move(other)), qNorm_(std::move(other.qNorm_)), kNorm_(std::move(other.kNorm_)) {
+      : Attention(std::move(other)),
+        rmsNormEps_(other.rmsNormEps_),
+        qNorm_(std::move(other.qNorm_)),
+        kNorm_(std::move(other.kNorm_)) {
     registerQkNorm_Modules();
   }
 
   AttentionWithQKNorm &operator=(AttentionWithQKNorm &&) = delete;
   AttentionWithQKNorm(const AttentionWithQKNorm &) = delete;
   AttentionWithQKNorm &operator=(const AttentionWithQKNorm &) = delete;
+
+  // fuse K-Norm + RoPE(K) + ScatterKV into one kernel
+  Tensor forward(const Tensor &input) override {
+    auto *ctx = tinygpt::ForwardContext::current();
+    ASSERT(ctx != nullptr && ctx->pagedCache != nullptr);
+
+    rope_.to(input.device());
+
+    auto total = input.size(0);
+
+    auto qkv = qkvProj_(input);
+    auto qkvSplit = qkv.split({qDim_, kvDim_, kvDim_}, -1);
+    auto queries = qkvSplit[0].view({total, numHeads_, headDim_});
+    auto keys = qkvSplit[1].view({total, numKvHeads_, headDim_});
+    auto values = qkvSplit[2].view({total, numKvHeads_, headDim_});
+
+    queries = qNorm_(queries);
+    queries = rope_.apply(queries, ctx->positions);
+
+    // fused K-norm + RoPE(K) + scatter KV
+    auto &kPool = ctx->pagedCache->kPool(layerIdx_);
+    auto &vPool = ctx->pagedCache->vPool(layerIdx_);
+    tinygpt::kernel::normRopeScatterKVToCache(keys, values, kPool, vPool, ctx->slotMapping, ctx->pageSize,
+                                              rope_.cache(), ctx->positions, kNorm_.weight(), rmsNormEps_);
+
+    // paged flash attention
+    auto attnOutput = tinygpt::kernel::flashAttentionPagedVarLen(
+        queries, kPool, vPool, ctx->cuSeqLensQ, ctx->cuSeqLensKV, ctx->blockTable, ctx->maxSeqLenQ, ctx->maxSeqLenKV,
+        ctx->pageSize, ctx->maxBlocksPerSeq, /*isCausal=*/true, ctx->tmpO, ctx->tmpLse);
+    ASSERT(attnOutput.defined());
+
+    return oProj_(attnOutput.reshape({total, qDim_}));
+  }
 
  private:
   void registerQkNorm_Modules() {
@@ -153,15 +185,7 @@ class AttentionWithQKNorm : public Attention {
   }
 
  protected:
-  std::tuple<Tensor, Tensor, Tensor> projectQKV(const Tensor &input, int64_t batchSize, int64_t seqLen) override {
-    auto qkv = qkvProj_(input);
-    auto qkvSplit = qkv.split({qDim_, kvDim_, kvDim_}, -1);
-    auto queries = qNorm_(qkvSplit[0].view({batchSize, seqLen, numHeads_, headDim_}));
-    auto keys = kNorm_(qkvSplit[1].view({batchSize, seqLen, numKvHeads_, headDim_}));
-    auto values = qkvSplit[2].view({batchSize, seqLen, numKvHeads_, headDim_});
-    return {queries, keys, values};
-  }
-
+  float rmsNormEps_;
   RMSNorm qNorm_;
   RMSNorm kNorm_;
 };

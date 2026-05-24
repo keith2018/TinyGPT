@@ -20,17 +20,18 @@ using Config = huggingface::model::MistralConfig;
 
 using MistralForCausalLM = tt::nn::CausalLM<tt::nn::Attention, tt::nn::GatedMLP>;
 
-inline std::unique_ptr<MistralForCausalLM> createModel(const Config &config, KVCacheManager &kvCache,
-                                                       tt::Options options) {
+inline std::unique_ptr<MistralForCausalLM> createModel(const Config &config, tt::Options options) {
   int64_t headDim = config.hiddenSize / config.numAttentionHeads;
   tt::nn::AttentionConfig attnConfig{config.hiddenSize, config.numAttentionHeads, headDim, config.numKeyValueHeads};
 
-  auto attnFactory = [&](int layerIdx) {
-    auto rope = tt::nn::RoPE(headDim, config.maxPositionEmbeddings, config.ropeTheta, std::nullopt, options);
-    return tt::nn::Attention(&kvCache, layerIdx, attnConfig, std::move(rope), options);
+  auto ropeCache = tinygpt::kernel::ropeInit(headDim, config.maxPositionEmbeddings, config.ropeTheta, nullptr, options);
+
+  auto attnFactory = [&](int64_t layerIdx) {
+    auto rope = tt::nn::RoPE(ropeCache);
+    return tt::nn::Attention(static_cast<size_t>(layerIdx), attnConfig, std::move(rope), options);
   };
 
-  auto mlpFactory = [&](int /*layerIdx*/) {
+  auto mlpFactory = [&](int64_t /*layerIdx*/) {
     return tt::nn::GatedMLP(config.hiddenSize, config.intermediateSize, options);
   };
 
@@ -39,32 +40,28 @@ inline std::unique_ptr<MistralForCausalLM> createModel(const Config &config, KVC
                                               mlpFactory);
 }
 
+inline GPTModel::ModelDims makeDims(const Config &config) {
+  const int64_t headDim = config.hiddenSize / config.numAttentionHeads;
+  return {
+      config.numHiddenLayers, config.maxPositionEmbeddings, config.numAttentionHeads, config.numKeyValueHeads, headDim,
+      config.hiddenSize};
+}
+
 }  // namespace mistral
 
 class ModelMistral : public GPTModel {
  public:
   ModelMistral(const huggingface::model::MistralConfig &config, tinytorch::Device device)
-      : config_(config),
-        device_(device),
-        model_(mistral::createModel(config_, kvCache_, tinytorch::Options(device, config.torchDtype))) {
-    init();
-  }
+      : GPTModel(mistral::makeDims(config), device),
+        model_(mistral::createModel(config, tinytorch::Options(device, config.torchDtype))) {}
 
   ~ModelMistral() override = default;
 
-  GPTModelType type() override { return GPTModelType::MISTRAL; }
-
-  int64_t numLayers() override { return config_.numHiddenLayers; }
-
-  int64_t contextSize() override { return config_.maxPositionEmbeddings; }
+  GPTModelType type() const override { return GPTModelType::MISTRAL; }
 
   tinytorch::nn::Module &model() override { return *model_; }
 
-  tinytorch::Device device() const override { return device_; }
-
  private:
-  const huggingface::model::MistralConfig &config_;
-  tinytorch::Device device_;
   std::unique_ptr<tinytorch::nn::CausalLM<tinytorch::nn::Attention, tinytorch::nn::GatedMLP>> model_;
 };
 

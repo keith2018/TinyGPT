@@ -11,41 +11,41 @@
 using namespace tinygpt;
 
 // --- Basic variable output ---
-TEST(TEST_chat_template, basic_variable) {
+TEST(chat_template, basic_variable) {
   auto result = tokenizer::applyChatTemplate("Hello {{ name }}!", {}, true, "", "");
   // name is not set, so it outputs nothing (none → "")
   EXPECT_EQ(result, "Hello !");
 }
 
-TEST(TEST_chat_template, basic_text_only) {
+TEST(chat_template, basic_text_only) {
   auto result = tokenizer::applyChatTemplate("Hello world!", {}, true, "", "");
   EXPECT_EQ(result, "Hello world!");
 }
 
 // --- String literal ---
-TEST(TEST_chat_template, string_literal) {
+TEST(chat_template, string_literal) {
   auto result = tokenizer::applyChatTemplate("{{ 'hello' }}", {}, false, "", "");
   EXPECT_EQ(result, "hello");
 }
 
 // --- Boolean and special variables ---
-TEST(TEST_chat_template, builtin_variables) {
+TEST(chat_template, builtin_variables) {
   auto result = tokenizer::applyChatTemplate("{{ bos_token }}{{ eos_token }}", {}, false, "<s>", "</s>");
   EXPECT_EQ(result, "<s></s>");
 }
 
-TEST(TEST_chat_template, add_generation_prompt_true) {
+TEST(chat_template, add_generation_prompt_true) {
   auto result = tokenizer::applyChatTemplate("{% if add_generation_prompt %}GEN{% endif %}", {}, true, "", "");
   EXPECT_EQ(result, "GEN");
 }
 
-TEST(TEST_chat_template, add_generation_prompt_false) {
+TEST(chat_template, add_generation_prompt_false) {
   auto result = tokenizer::applyChatTemplate("{% if add_generation_prompt %}GEN{% endif %}", {}, false, "", "");
   EXPECT_EQ(result, "");
 }
 
 // --- For loop with messages ---
-TEST(TEST_chat_template, for_loop_messages) {
+TEST(chat_template, for_loop_messages) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"user", "Hi"},
       {"assistant", "Hello"},
@@ -55,7 +55,7 @@ TEST(TEST_chat_template, for_loop_messages) {
   EXPECT_EQ(result, "[user:Hi][assistant:Hello]");
 }
 
-TEST(TEST_chat_template, for_loop_index_access) {
+TEST(chat_template, for_loop_index_access) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"user", "Hi"},
   };
@@ -65,7 +65,7 @@ TEST(TEST_chat_template, for_loop_index_access) {
 }
 
 // --- Loop variables ---
-TEST(TEST_chat_template, loop_first_last) {
+TEST(chat_template, loop_first_last) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"user", "A"},
       {"user", "B"},
@@ -81,7 +81,7 @@ TEST(TEST_chat_template, loop_first_last) {
   EXPECT_EQ(result, "FIRSTABLASTC");
 }
 
-TEST(TEST_chat_template, loop_index) {
+TEST(chat_template, loop_index) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"user", "A"},
       {"user", "B"},
@@ -91,7 +91,7 @@ TEST(TEST_chat_template, loop_index) {
 }
 
 // --- If / elif / else ---
-TEST(TEST_chat_template, if_elif_else) {
+TEST(chat_template, if_elif_else) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"system", "sys"},
       {"user", "usr"},
@@ -109,7 +109,7 @@ TEST(TEST_chat_template, if_elif_else) {
 }
 
 // --- String comparison with != ---
-TEST(TEST_chat_template, not_equal) {
+TEST(chat_template, not_equal) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"user", "hi"},
   };
@@ -119,50 +119,50 @@ TEST(TEST_chat_template, not_equal) {
 }
 
 // --- Boolean operators: and / or / not ---
-TEST(TEST_chat_template, bool_and) {
+TEST(chat_template, bool_and) {
   auto result = tokenizer::applyChatTemplate("{% if true and true %}YES{% endif %}", {});
   EXPECT_EQ(result, "YES");
 }
 
-TEST(TEST_chat_template, bool_or) {
+TEST(chat_template, bool_or) {
   auto result = tokenizer::applyChatTemplate("{% if false or true %}YES{% endif %}", {});
   EXPECT_EQ(result, "YES");
 }
 
-TEST(TEST_chat_template, bool_not) {
+TEST(chat_template, bool_not) {
   auto result = tokenizer::applyChatTemplate("{% if not false %}YES{% endif %}", {});
   EXPECT_EQ(result, "YES");
 }
 
 // --- Whitespace control ---
-TEST(TEST_chat_template, trim_left) {
+TEST(chat_template, trim_left) {
   auto result = tokenizer::applyChatTemplate("hello   {%- if true %} world{% endif %}", {});
   EXPECT_EQ(result, "hello world");
 }
 
-TEST(TEST_chat_template, trim_right) {
+TEST(chat_template, trim_right) {
   auto result = tokenizer::applyChatTemplate("{% if true -%}   hello{% endif %}", {});
   EXPECT_EQ(result, "hello");
 }
 
-TEST(TEST_chat_template, trim_both) {
+TEST(chat_template, trim_both) {
   auto result = tokenizer::applyChatTemplate("A  {%- if true -%}  B  {%- endif -%}  C", {});
   EXPECT_EQ(result, "ABC");
 }
 
-TEST(TEST_chat_template, trim_var) {
+TEST(chat_template, trim_var) {
   auto result = tokenizer::applyChatTemplate("hello   {{- ' world' }}", {});
   EXPECT_EQ(result, "hello world");
 }
 
 // --- Filter: trim ---
-TEST(TEST_chat_template, filter_trim) {
+TEST(chat_template, filter_trim) {
   auto result = tokenizer::applyChatTemplate("{{ '  hello  ' | trim }}", {});
   EXPECT_EQ(result, "hello");
 }
 
 // --- Filter: length ---
-TEST(TEST_chat_template, filter_length) {
+TEST(chat_template, filter_length) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"user", "A"},
       {"user", "B"},
@@ -173,70 +173,70 @@ TEST(TEST_chat_template, filter_length) {
 }
 
 // --- Filter: upper / lower ---
-TEST(TEST_chat_template, filter_upper) {
+TEST(chat_template, filter_upper) {
   auto result = tokenizer::applyChatTemplate("{{ 'hello' | upper }}", {});
   EXPECT_EQ(result, "HELLO");
 }
 
-TEST(TEST_chat_template, filter_lower) {
+TEST(chat_template, filter_lower) {
   auto result = tokenizer::applyChatTemplate("{{ 'HELLO' | lower }}", {});
   EXPECT_EQ(result, "hello");
 }
 
 // --- Filter: default ---
-TEST(TEST_chat_template, filter_default) {
+TEST(chat_template, filter_default) {
   auto result = tokenizer::applyChatTemplate("{{ undefined_var | default('fallback') }}", {});
   EXPECT_EQ(result, "fallback");
 }
 
 // --- String concatenation with ~ ---
-TEST(TEST_chat_template, tilde_concat) {
+TEST(chat_template, tilde_concat) {
   auto result = tokenizer::applyChatTemplate("{{ 'hello' ~ ' ' ~ 'world' }}", {});
   EXPECT_EQ(result, "hello world");
 }
 
 // --- String concatenation with + ---
-TEST(TEST_chat_template, plus_concat) {
+TEST(chat_template, plus_concat) {
   auto result = tokenizer::applyChatTemplate("{{ 'hello' + ' world' }}", {});
   EXPECT_EQ(result, "hello world");
 }
 
 // --- Set variable ---
-TEST(TEST_chat_template, set_variable) {
+TEST(chat_template, set_variable) {
   auto result = tokenizer::applyChatTemplate("{% set x = 'hello' %}{{ x }}", {});
   EXPECT_EQ(result, "hello");
 }
 
 // --- Integer operations ---
-TEST(TEST_chat_template, int_modulo) {
+TEST(chat_template, int_modulo) {
   auto result = tokenizer::applyChatTemplate("{{ 5 % 2 }}", {});
   EXPECT_EQ(result, "1");
 }
 
-TEST(TEST_chat_template, int_comparison) {
+TEST(chat_template, int_comparison) {
   auto result = tokenizer::applyChatTemplate("{% if 3 > 2 %}YES{% endif %}", {});
   EXPECT_EQ(result, "YES");
 }
 
 // --- is defined / is not defined ---
-TEST(TEST_chat_template, is_defined) {
+TEST(chat_template, is_defined) {
   auto result = tokenizer::applyChatTemplate("{% if bos_token is defined %}YES{% endif %}", {}, false, "<s>", "");
   EXPECT_EQ(result, "YES");
 }
 
-TEST(TEST_chat_template, is_not_defined) {
+TEST(chat_template, is_not_defined) {
   auto result = tokenizer::applyChatTemplate("{% if unknown_var is not defined %}YES{% endif %}", {});
   EXPECT_EQ(result, "YES");
 }
 
 // --- Escape sequences in strings ---
-TEST(TEST_chat_template, escape_newline) {
+TEST(chat_template, escape_newline) {
   auto result = tokenizer::applyChatTemplate("{{ 'line1\\nline2' }}", {});
   EXPECT_EQ(result, "line1\nline2");
 }
 
 // --- Nested if inside for ---
-TEST(TEST_chat_template, nested_if_in_for) {
+TEST(chat_template, nested_if_in_for) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"system", "Be helpful"},
       {"user", "Hello"},
@@ -254,7 +254,7 @@ TEST(TEST_chat_template, nested_if_in_for) {
 }
 
 // --- Realistic Llama3-style template ---
-TEST(TEST_chat_template, llama3_style) {
+TEST(chat_template, llama3_style) {
   std::string tmpl =
       "{{ bos_token }}"
       "{% for message in messages %}"
@@ -292,7 +292,7 @@ TEST(TEST_chat_template, llama3_style) {
 }
 
 // --- Realistic ChatML-style template ---
-TEST(TEST_chat_template, chatml_style) {
+TEST(chat_template, chatml_style) {
   std::string tmpl =
       "{% for message in messages %}"
       "<|im_start|>{{ message.role }}\n"
@@ -320,7 +320,7 @@ TEST(TEST_chat_template, chatml_style) {
 }
 
 // --- Whitespace control in realistic template ---
-TEST(TEST_chat_template, whitespace_control_realistic) {
+TEST(chat_template, whitespace_control_realistic) {
   std::string tmpl =
       "{%- for message in messages %}"
       "{%- if message.role == 'user' -%}"
@@ -351,19 +351,19 @@ TEST(TEST_chat_template, whitespace_control_realistic) {
 }
 
 // --- Empty messages ---
-TEST(TEST_chat_template, empty_messages) {
+TEST(chat_template, empty_messages) {
   auto result = tokenizer::applyChatTemplate("{% for msg in messages %}X{% endfor %}", {});
   EXPECT_EQ(result, "");
 }
 
 // --- Method call: strip ---
-TEST(TEST_chat_template, method_strip) {
+TEST(chat_template, method_strip) {
   auto result = tokenizer::applyChatTemplate("{{ '  hello  '.strip() }}", {});
   EXPECT_EQ(result, "hello");
 }
 
 // --- Namespace-like set in loop ---
-TEST(TEST_chat_template, set_in_loop_scope) {
+TEST(chat_template, set_in_loop_scope) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"user", "A"},
       {"user", "B"},
@@ -380,18 +380,18 @@ TEST(TEST_chat_template, set_in_loop_scope) {
 }
 
 // --- in operator ---
-TEST(TEST_chat_template, in_operator) {
+TEST(chat_template, in_operator) {
   auto result = tokenizer::applyChatTemplate("{% if 'hello' in 'hello world' %}YES{% endif %}", {});
   EXPECT_EQ(result, "YES");
 }
 
-TEST(TEST_chat_template, not_in_operator) {
+TEST(chat_template, not_in_operator) {
   auto result = tokenizer::applyChatTemplate("{% if 'xyz' not in 'hello world' %}YES{% endif %}", {});
   EXPECT_EQ(result, "YES");
 }
 
 // --- Filter: first / last ---
-TEST(TEST_chat_template, filter_first) {
+TEST(chat_template, filter_first) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"user", "First"},
       {"user", "Last"},
@@ -401,18 +401,18 @@ TEST(TEST_chat_template, filter_first) {
 }
 
 // --- is none / is not none ---
-TEST(TEST_chat_template, is_none) {
+TEST(chat_template, is_none) {
   auto result = tokenizer::applyChatTemplate("{% if unknown is none %}YES{% endif %}", {});
   EXPECT_EQ(result, "YES");
 }
 
-TEST(TEST_chat_template, is_not_none) {
+TEST(chat_template, is_not_none) {
   auto result = tokenizer::applyChatTemplate("{% if bos_token is not none %}YES{% endif %}", {}, false, "<s>", "");
   EXPECT_EQ(result, "YES");
 }
 
 // --- namespace() for mutable state across loop iterations ---
-TEST(TEST_chat_template, namespace_basic) {
+TEST(chat_template, namespace_basic) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"system", "sys"},
       {"user", "usr"},
@@ -430,24 +430,24 @@ TEST(TEST_chat_template, namespace_basic) {
 }
 
 // --- String split method ---
-TEST(TEST_chat_template, method_split) {
+TEST(chat_template, method_split) {
   auto result = tokenizer::applyChatTemplate("{{ 'a-b-c'.split('-')[1] }}", {});
   EXPECT_EQ(result, "b");
 }
 
-TEST(TEST_chat_template, method_split_negative_index) {
+TEST(chat_template, method_split_negative_index) {
   auto result = tokenizer::applyChatTemplate("{{ 'hello</think>world'.split('</think>')[-1] }}", {});
   EXPECT_EQ(result, "world");
 }
 
 // --- Integer subtraction ---
-TEST(TEST_chat_template, int_subtraction) {
+TEST(chat_template, int_subtraction) {
   auto result = tokenizer::applyChatTemplate("{{ 5 - 3 }}", {});
   EXPECT_EQ(result, "2");
 }
 
 // --- Negative integer literal ---
-TEST(TEST_chat_template, negative_index) {
+TEST(chat_template, negative_index) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"user", "First"},
       {"user", "Last"},
@@ -457,7 +457,7 @@ TEST(TEST_chat_template, negative_index) {
 }
 
 // --- Message list integer indexing ---
-TEST(TEST_chat_template, message_list_index) {
+TEST(chat_template, message_list_index) {
   std::vector<tokenizer::ChatMessage> messages = {
       {"system", "sys"},
       {"user", "usr"},
@@ -467,29 +467,29 @@ TEST(TEST_chat_template, message_list_index) {
 }
 
 // --- startswith / endswith ---
-TEST(TEST_chat_template, method_startswith) {
+TEST(chat_template, method_startswith) {
   auto result = tokenizer::applyChatTemplate("{% if 'hello world'.startswith('hello') %}YES{% endif %}", {});
   EXPECT_EQ(result, "YES");
 }
 
-TEST(TEST_chat_template, method_endswith) {
+TEST(chat_template, method_endswith) {
   auto result = tokenizer::applyChatTemplate("{% if 'hello world'.endswith('world') %}YES{% endif %}", {});
   EXPECT_EQ(result, "YES");
 }
 
 // --- lstrip / rstrip ---
-TEST(TEST_chat_template, method_lstrip) {
+TEST(chat_template, method_lstrip) {
   auto result = tokenizer::applyChatTemplate("{{ '\\nhello'.lstrip('\\n') }}", {});
   EXPECT_EQ(result, "hello");
 }
 
-TEST(TEST_chat_template, method_rstrip) {
+TEST(chat_template, method_rstrip) {
   auto result = tokenizer::applyChatTemplate("{{ 'hello\\n'.rstrip('\\n') }}", {});
   EXPECT_EQ(result, "hello");
 }
 
 // --- Undefined attribute access returns none (falsy) ---
-TEST(TEST_chat_template, undefined_attribute_falsy) {
+TEST(chat_template, undefined_attribute_falsy) {
   std::vector<tokenizer::ChatMessage> messages = {{"user", "hi"}};
   auto result = tokenizer::applyChatTemplate(
       "{% for msg in messages %}{% if msg.tool_calls %}HAS_TOOLS{% else %}NO_TOOLS{% endif %}{% endfor %}", messages);
@@ -497,7 +497,7 @@ TEST(TEST_chat_template, undefined_attribute_falsy) {
 }
 
 // --- Undefined variable is falsy ---
-TEST(TEST_chat_template, undefined_variable_falsy) {
+TEST(chat_template, undefined_variable_falsy) {
   auto result = tokenizer::applyChatTemplate("{% if tools %}HAS_TOOLS{% else %}NO_TOOLS{% endif %}", {});
   EXPECT_EQ(result, "NO_TOOLS");
 }
@@ -510,7 +510,7 @@ inline bool loadTokenizer(tokenizer::Tokenizer& tokenizer, const std::string& di
 }
 
 // --- DeepSeek-R1-Distill-Llama-8B: simple user message ---
-TEST(TEST_chat_template, deepseek_r1_simple_user) {
+TEST(chat_template, deepseek_r1_simple_user) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/DeepSeek-R1-Distill-Llama-8B");
   ASSERT_TRUE(initOk);
@@ -540,7 +540,7 @@ TEST(TEST_chat_template, deepseek_r1_simple_user) {
 }
 
 // --- DeepSeek-R1-Distill-Llama-8B: with system message ---
-TEST(TEST_chat_template, deepseek_r1_with_system) {
+TEST(chat_template, deepseek_r1_with_system) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/DeepSeek-R1-Distill-Llama-8B");
   ASSERT_TRUE(initOk);
@@ -563,7 +563,7 @@ TEST(TEST_chat_template, deepseek_r1_with_system) {
 }
 
 // --- DeepSeek-R1-Distill-Llama-8B: multi-turn ---
-TEST(TEST_chat_template, deepseek_r1_multi_turn) {
+TEST(chat_template, deepseek_r1_multi_turn) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/DeepSeek-R1-Distill-Llama-8B");
   ASSERT_TRUE(initOk);
@@ -594,7 +594,7 @@ TEST(TEST_chat_template, deepseek_r1_multi_turn) {
 }
 
 // --- Qwen2.5-3B: simple user message ---
-TEST(TEST_chat_template, qwen25_simple_user) {
+TEST(chat_template, qwen25_simple_user) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Qwen2.5-3B");
   ASSERT_TRUE(initOk);
@@ -612,7 +612,7 @@ TEST(TEST_chat_template, qwen25_simple_user) {
 }
 
 // --- Qwen2.5-3B: with system message ---
-TEST(TEST_chat_template, qwen25_with_system) {
+TEST(chat_template, qwen25_with_system) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Qwen2.5-3B");
   ASSERT_TRUE(initOk);
@@ -632,7 +632,7 @@ TEST(TEST_chat_template, qwen25_with_system) {
 }
 
 // --- Qwen2.5-3B: multi-turn ---
-TEST(TEST_chat_template, qwen25_multi_turn) {
+TEST(chat_template, qwen25_multi_turn) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Qwen2.5-3B");
   ASSERT_TRUE(initOk);
@@ -656,7 +656,7 @@ TEST(TEST_chat_template, qwen25_multi_turn) {
 }
 
 // --- Qwen3-0.6B: simple user message ---
-TEST(TEST_chat_template, qwen3_simple_user) {
+TEST(chat_template, qwen3_simple_user) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Qwen3-0.6B");
   ASSERT_TRUE(initOk);
@@ -673,7 +673,7 @@ TEST(TEST_chat_template, qwen3_simple_user) {
 }
 
 // --- Qwen3-0.6B: with system message ---
-TEST(TEST_chat_template, qwen3_with_system) {
+TEST(chat_template, qwen3_with_system) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Qwen3-0.6B");
   ASSERT_TRUE(initOk);
@@ -693,7 +693,7 @@ TEST(TEST_chat_template, qwen3_with_system) {
 }
 
 // --- Qwen3-0.6B: multi-turn ---
-TEST(TEST_chat_template, qwen3_multi_turn) {
+TEST(chat_template, qwen3_multi_turn) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Qwen3-0.6B");
   ASSERT_TRUE(initOk);
@@ -717,7 +717,7 @@ TEST(TEST_chat_template, qwen3_multi_turn) {
 }
 
 // --- Qwen3-0.6B: no generation prompt ---
-TEST(TEST_chat_template, qwen3_no_gen_prompt) {
+TEST(chat_template, qwen3_no_gen_prompt) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Qwen3-0.6B");
   ASSERT_TRUE(initOk);
@@ -736,7 +736,7 @@ TEST(TEST_chat_template, qwen3_no_gen_prompt) {
 }
 
 // --- Verify tokenizer::applyChatTemplate + encode roundtrip ---
-TEST(TEST_chat_template, qwen25_template_then_encode) {
+TEST(chat_template, qwen25_template_then_encode) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Qwen2.5-3B");
   ASSERT_TRUE(initOk);
@@ -754,7 +754,7 @@ TEST(TEST_chat_template, qwen25_template_then_encode) {
   EXPECT_EQ(decoded, text);
 }
 
-TEST(TEST_chat_template, deepseek_r1_template_then_encode) {
+TEST(chat_template, deepseek_r1_template_then_encode) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/DeepSeek-R1-Distill-Llama-8B");
   ASSERT_TRUE(initOk);

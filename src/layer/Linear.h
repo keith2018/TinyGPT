@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Modules.h"
+#include "kernel/GemvOps.h"
 
 namespace tinytorch::nn {
 
@@ -30,6 +31,32 @@ class LinearRef : public Module {
  private:
   TensorPtr weight_;
   TensorPtr bias_;
+};
+
+class GemvLinear : public Linear {
+ public:
+  GemvLinear(int64_t inFeatures, int64_t outFeatures, bool bias = false, Options options = {})
+      : Linear(inFeatures, outFeatures, bias, options) {}
+
+  GemvLinear(GemvLinear &&other) noexcept : Linear(std::move(other)) {}
+
+  GemvLinear &operator=(GemvLinear &&other) noexcept {
+    if (this != &other) {
+      Linear::operator=(std::move(other));
+    }
+    return *this;
+  }
+
+  GemvLinear(const GemvLinear &) = delete;
+  GemvLinear &operator=(const GemvLinear &) = delete;
+
+  Tensor forward(const Tensor &input) override {
+    if (!useBias_ && input.dim() == 2 && input.size(0) == 1 && input.device().isCuda()) {
+      auto result = tinygpt::kernel::gemvLinear(input, weight_);
+      if (result.defined()) return result;
+    }
+    return Linear::forward(input);
+  }
 };
 
 class MergedLinear : public Linear {
@@ -57,6 +84,16 @@ class MergedLinear : public Linear {
 
   LinearRef &moduleRefs(int64_t idx) { return moduleRefs_[idx]; }
 
+  Tensor forward(const Tensor &input) override {
+    if (!useBias_ && input.dim() == 2 && input.size(0) == 1 && input.device().isCuda()) {
+      auto result = tinygpt::kernel::gemvLinear(input, weight_);
+      if (result.defined()) {
+        return result;
+      }
+    }
+    return Linear::forward(input);
+  }
+
  protected:
   std::vector<std::pair<std::string, TensorPtr>> namedParameters_() override { return {}; }
 
@@ -80,7 +117,7 @@ class MergedLinear : public Linear {
 
   static int64_t arraySum(IntArrayView arr) {
     int64_t ret = 0;
-    for (long i : arr) {
+    for (int64_t i : arr) {
       ret += i;
     }
     return ret;

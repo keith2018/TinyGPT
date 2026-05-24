@@ -97,21 +97,6 @@ Available options:
 | `--temperature <f>`          | `0.8`      | Sampling temperature                |
 | `--top-p <f>`                | `0.9`      | Top-p (nucleus) sampling            |
 
-Example output:
-
-```
-[INFO] Load model ...
-[INFO] Load model done.
-[INFO] Generated Outputs:
-[INFO] ------------------------------------------------------------
-[INFO] Prompt:    'Hello, my name is'
-[INFO] Output:    ' Max! I am Phelan and I'm the world's greatest magician! ...'
-[INFO] ------------------------------------------------------------
-[INFO] Prompt:    'The president of the United States is'
-[INFO] Output:    ' on a temporary trip to Asia, and the Pentagon has made several announcements ...'
-[INFO] ------------------------------------------------------------
-[INFO] Time cost: 1907 ms, speed: 83.90 token/s
-```
 
 ## Server
 

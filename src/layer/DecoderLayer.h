@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "Functions.h"
 #include "Modules.h"
 
 namespace tinytorch::nn {
@@ -35,11 +36,19 @@ class DecoderLayer : public Module {
   DecoderLayer &operator=(const DecoderLayer &) = delete;
   DecoderLayer &operator=(DecoderLayer &&) = delete;
 
-  Tensor forward(const Tensor &input) override {
-    auto x = input;
-    x = x + selfAttn_(inputLayerNorm_(x));
-    x = x + mlp_(postAttnLayerNorm_(x));
-    return x;
+  std::pair<Tensor, Tensor> forward(Tensor hiddenStates, Tensor residual) {
+    if (!residual.defined()) {
+      residual = hiddenStates;
+      hiddenStates = inputLayerNorm_(hiddenStates);
+    } else {
+      function::fusedAddRmsNorm(hiddenStates, residual, inputLayerNorm_.weight(), inputLayerNorm_.eps());
+    }
+    hiddenStates = selfAttn_(hiddenStates);
+
+    function::fusedAddRmsNorm(hiddenStates, residual, postAttnLayerNorm_.weight(), postAttnLayerNorm_.eps());
+    hiddenStates = mlp_(hiddenStates);
+
+    return {hiddenStates, residual};
   }
 
  private:

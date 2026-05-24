@@ -108,25 +108,25 @@ std::string ByteLevel::utf8ToBytes(std::string_view str) {
   return result;
 }
 
-int32_t ByteLevel::findIncompletePos(std::string_view str) {
-  const auto len = static_cast<int32_t>(str.size());
+std::optional<size_t> ByteLevel::findIncompletePos(std::string_view str) {
+  const auto len = str.size();
   if (len == 0) {
-    return -1;
+    return std::nullopt;
   }
 
   const auto* data = reinterpret_cast<const uint8_t*>(str.data());
-  int32_t start = std::max(0, len - 4);
-  for (int32_t pos = start; pos < len; pos++) {
+  const size_t start = (len >= 4) ? (len - 4) : 0;
+  for (size_t pos = start; pos < len; pos++) {
     utf8proc_int32_t codepoint;
-    auto charLen = utf8proc_iterate(data + pos, len - pos, &codepoint);
+    auto charLen = utf8proc_iterate(data + pos, static_cast<utf8proc_ssize_t>(len - pos), &codepoint);
     if (charLen < 0) {
       return pos;
     }
-    if (pos + charLen > len) {
+    if (pos + static_cast<size_t>(charLen) > len) {
       return pos;
     }
   }
-  return -1;
+  return std::nullopt;
 }
 
 std::vector<std::string_view> ByteLevel::splitUTF8(std::string_view str) {

@@ -60,19 +60,8 @@ std::unique_ptr<ModelConfig> loadModelConfig(const std::string& cfgPath) {
 
   std::unique_ptr<ModelConfig> config;
 
-  if (modelType == MODEL_TYPE_GPT2) {
-    auto cfg = std::make_unique<GPT2Config>();
-    cfg->activationFunction = getJsonValue<std::string>(doc, "activation_function", "");
-    cfg->layerNormEpsilon = getJsonValue<float>(doc, "layer_norm_epsilon", 1e-5f);
-    cfg->nCtx = getJsonValue<int64_t>(doc, "n_ctx", -1);
-    cfg->nEmbd = getJsonValue<int64_t>(doc, "n_embd", -1);
-    cfg->nHead = getJsonValue<int64_t>(doc, "n_head", -1);
-    cfg->nLayer = getJsonValue<int64_t>(doc, "n_layer", -1);
-    cfg->nPositions = getJsonValue<int64_t>(doc, "n_positions", -1);
-    config = std::move(cfg);
-  } else if (modelType == MODEL_TYPE_LLAMA) {
+  if (modelType == MODEL_TYPE_LLAMA) {
     auto cfg = std::make_unique<LlamaConfig>();
-    cfg->attentionBias = getJsonValue<bool>(doc, "attention_bias", false);
     cfg->headDim = getJsonValue<int64_t>(doc, "head_dim", -1);
 
     // rope
@@ -83,7 +72,6 @@ std::unique_ptr<ModelConfig> loadModelConfig(const std::string& cfgPath) {
       cfg->ropeScaling.lowFreqFactor = getJsonValue<float>(rope, "low_freq_factor", 1.f);
       cfg->ropeScaling.originalMaxPositionEmbeddings =
           getJsonValue<int64_t>(rope, "original_max_position_embeddings", -1);
-      cfg->ropeScaling.ropeType = getJsonValue<std::string>(rope, "rope_type", "");
     }
     cfg->ropeTheta = getJsonValue<float>(doc, "rope_theta", 1.f);
     config = std::move(cfg);
@@ -91,15 +79,10 @@ std::unique_ptr<ModelConfig> loadModelConfig(const std::string& cfgPath) {
     auto cfg = std::make_unique<QwenConfig>();
     cfg->ropeTheta = getJsonValue<float>(doc, "rope_theta", 10000.f);
     cfg->headDim = getJsonValue<int64_t>(doc, "head_dim", -1);
-    cfg->slidingWindow = getJsonValue<int64_t>(doc, "sliding_window", -1);
-    cfg->useSlidingWindow = getJsonValue<bool>(doc, "use_sliding_window", false);
-    cfg->useMRope = getJsonValue<bool>(doc, "use_mrope", false);
     config = std::move(cfg);
   } else if (modelType == MODEL_TYPE_MISTRAL) {
     auto cfg = std::make_unique<MistralConfig>();
     cfg->ropeTheta = getJsonValue<float>(doc, "rope_theta", 10000.0f);
-    cfg->slidingWindow = getJsonValue<int64_t>(doc, "sliding_window", -1);
-    cfg->useSlidingWindow = cfg->slidingWindow > 0;
     config = std::move(cfg);
   } else {
     LOGE("Unsupported model_type: %s", modelType.c_str());
@@ -108,7 +91,6 @@ std::unique_ptr<ModelConfig> loadModelConfig(const std::string& cfgPath) {
 
   config->bosTokenId = getJsonValue<int64_t>(doc, "bos_token_id", -1);
   config->eosTokenId = getJsonValue<int64_t>(doc, "eos_token_id", -1);
-  config->hiddenAct = getJsonValue<std::string>(doc, "hidden_act", "");
   config->hiddenSize = getJsonValue<int64_t>(doc, "hidden_size", -1);
   config->intermediateSize = getJsonValue<int64_t>(doc, "intermediate_size", -1);
   config->maxPositionEmbeddings = getJsonValue<int64_t>(doc, "max_position_embeddings", -1);
@@ -137,27 +119,27 @@ std::unique_ptr<GenerationConfig> loadGenerationConfig(const std::string& cfgPat
   }
 
   auto cfg = std::make_unique<GenerationConfig>();
-  cfg->bosTokenId = getJsonValue<int64_t>(doc, "bos_token_id", -1);
+  cfg->bosTokenId = getJsonValue<int32_t>(doc, "bos_token_id", -1);
 
   if (doc.HasMember("eos_token_id")) {
     auto& val = doc["eos_token_id"];
     if (val.IsArray()) {
       for (auto& v : val.GetArray()) {
-        if (v.IsInt64())
-          cfg->eosTokenIds.push_back(v.GetInt64());
-        else if (v.IsInt())
+        if (v.IsInt())
           cfg->eosTokenIds.push_back(v.GetInt());
+        else if (v.IsInt64())
+          cfg->eosTokenIds.push_back(static_cast<int32_t>(v.GetInt64()));
       }
-    } else if (val.IsInt64()) {
-      cfg->eosTokenIds.push_back(val.GetInt64());
     } else if (val.IsInt()) {
       cfg->eosTokenIds.push_back(val.GetInt());
+    } else if (val.IsInt64()) {
+      cfg->eosTokenIds.push_back(static_cast<int32_t>(val.GetInt64()));
     }
   }
 
   cfg->doSample = getJsonValue<bool>(doc, "do_sample", false);
   cfg->temperature = getJsonValue<float>(doc, "temperature", 0.f);
-  cfg->topK = getJsonValue<int64_t>(doc, "top_k", 0);
+  cfg->topK = getJsonValue<int32_t>(doc, "top_k", 0);
   cfg->topP = getJsonValue<float>(doc, "top_p", 1.f);
 
   return cfg;
