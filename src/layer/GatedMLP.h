@@ -16,13 +16,13 @@ class GatedMLP : public Module {
  public:
   GatedMLP(int64_t inputSize, int64_t outputSize, Options options = {})
       : gateUpProj_(MergedLinear(inputSize, {outputSize, outputSize}, false, options)),
-        downProj_(Linear(outputSize, inputSize, false, options)),
+        downProj_(GemvLinear(outputSize, inputSize, false, options)),
         actFn_(SiLUMul()) {
     registerSubModules();
   }
 
   GatedMLP(GatedMLP &&other) noexcept
-      : Module(std::move(other)),
+      : Module(other),
         gateUpProj_(std::move(other.gateUpProj_)),
         downProj_(std::move(other.downProj_)),
         actFn_(std::move(other.actFn_)) {
@@ -50,7 +50,7 @@ class GatedMLP : public Module {
   }
 
   MergedLinear gateUpProj_;
-  Linear downProj_;
+  GemvLinear downProj_;
   SiLUMul actFn_;
 };
 

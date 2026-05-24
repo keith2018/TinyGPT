@@ -6,7 +6,6 @@
 
 #include "ModelLoader.h"
 
-#include "model/ModelGPT2.h"
 #include "model/ModelLlama.h"
 #include "model/ModelMistral.h"
 #include "model/ModelQwen2.h"
@@ -47,10 +46,7 @@ bool ModelLoader::load(const std::string& dir, tinytorch::Device device, tinytor
   }
 
   // model
-  if (context_.modelConfig->modelType == model::MODEL_TYPE_GPT2) {
-    auto* config = dynamic_cast<model::GPT2Config*>(context_.modelConfig.get());
-    context_.model = std::make_unique<ModelGPT2>(*config, device);
-  } else if (context_.modelConfig->modelType == model::MODEL_TYPE_LLAMA) {
+  if (context_.modelConfig->modelType == model::MODEL_TYPE_LLAMA) {
     auto* config = dynamic_cast<model::LlamaConfig*>(context_.modelConfig.get());
     context_.model = std::make_unique<ModelLlama>(*config, device);
   } else if (context_.modelConfig->modelType == model::MODEL_TYPE_QWEN2) {

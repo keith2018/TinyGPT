@@ -7,8 +7,10 @@
 #pragma once
 
 #include "Modules.h"
-#include "engine/CacheManager.h"
-#include "layer/Attention.h"
+#include "engine/ForwardContext.h"
+#include "engine/PagedKVCache.h"
+#include "kernel/EmbeddingOps.h"
+#include "kernel/GemvOps.h"
 #include "layer/DecoderLayer.h"
 #include "layer/GatedMLP.h"
 #include "util/SafeTensors.h"
@@ -23,11 +25,12 @@ class CausalLM : public Module {
   template <typename AttnFactory, typename MLPFactory>
   CausalLM(int64_t vocabSize, int64_t hiddenSize, int64_t numLayers, float rmsNormEps, bool tieWordEmbeddings,
            Options options, AttnFactory &&attnFactory, MLPFactory &&mlpFactory)
-      : embedTokens_(Embedding(vocabSize, hiddenSize, options)),
+      : rmsNormEps_(rmsNormEps),
+        embedTokens_(Embedding(vocabSize, hiddenSize, options)),
         layers_(ModuleList()),
         norm_(RMSNorm({hiddenSize}, rmsNormEps, options)),
         lmHead_(Linear(hiddenSize, vocabSize, false, options)) {
-    for (int i = 0; i < numLayers; i++) {
+    for (int64_t i = 0; i < numLayers; i++) {
       auto attn = attnFactory(i);
       auto mlp = mlpFactory(i);
       auto inputLn = RMSNorm({hiddenSize}, rmsNormEps, options);
@@ -48,16 +51,41 @@ class CausalLM : public Module {
     });
   }
 
+  // inputIds: [totalTokens] int64 -> output: [selectedTokens, vocabSize]
   Tensor forward(const Tensor &inputIds) override {
-    auto x = embedTokens_(inputIds);
-    for (auto &layer : layers_) {
-      x = layer->forward(x);
+    // fast embedding lookup for decode (small token counts)
+    Tensor hiddenStates;
+    auto fastEmbed = tinygpt::kernel::embeddingLookup(inputIds, embedTokens_.weight());
+    if (fastEmbed.defined()) {
+      hiddenStates = fastEmbed;
+    } else {
+      hiddenStates = embedTokens_(inputIds);  // [totalTokens, hidden]
     }
-    x = norm_(x);
-    return lmHead_(x);
+    Tensor residual;
+
+    for (auto &layer : layers_) {
+      auto *typedLayer = static_cast<DecoderLayerType *>(layer.get());
+      std::tie(hiddenStates, residual) = typedLayer->forward(std::move(hiddenStates), std::move(residual));
+    }
+
+    // final fused residual-add + RMSNorm
+    function::fusedAddRmsNorm(hiddenStates, residual, norm_.weight(), rmsNormEps_);
+
+    // select last-token rows before lm_head
+    auto *ctx = tinygpt::ForwardContext::current();
+    if (ctx && ctx->lastTokenIndices.defined()) {
+      hiddenStates = function::indexSelect(hiddenStates, 0, ctx->lastTokenIndices);
+    }
+
+    // lm_head: use GEMV kernel for M=1 decode
+    if (hiddenStates.size(0) == 1 && hiddenStates.device().isCuda()) {
+      return tinygpt::kernel::gemvLmHead(hiddenStates, lmHead_.weight());
+    }
+    return lmHead_(hiddenStates);
   }
 
  protected:
+  float rmsNormEps_;
   Embedding embedTokens_;
   ModuleList layers_;
   RMSNorm norm_;
@@ -70,7 +98,6 @@ namespace tinygpt {
 
 enum class GPTModelType : int8_t {
   UNKNOWN = 0,
-  GPT2,
   LLAMA,
   QWEN2,
   QWEN3,
@@ -79,30 +106,42 @@ enum class GPTModelType : int8_t {
 
 class GPTModel {
  public:
+  struct ModelDims {
+    int64_t numLayers = 0;
+    int64_t contextSize = 0;
+    int64_t numHeads = 0;
+    int64_t numKvHeads = 0;
+    int64_t headDim = 0;
+    int64_t hiddenSize = 0;
+  };
+
   virtual ~GPTModel() = default;
 
-  virtual GPTModelType type() { return GPTModelType::UNKNOWN; }
+  virtual GPTModelType type() const { return GPTModelType::UNKNOWN; }
 
   tinytorch::Tensor forward(const tinytorch::Tensor &inputIds) { return model()(inputIds); }
 
-  KVCacheManager &kvCache() { return kvCache_; }
-  const KVCacheManager &kvCache() const { return kvCache_; }
-
-  void resetCache() {
-    kvCache_.reset();
-    kvCache_.create(numLayers());
-  }
+  PagedKVCache *pagedCache() const { return pagedCache_; }
+  void setPagedCache(PagedKVCache *cache) { pagedCache_ = cache; }
 
   virtual bool load(const std::string &path) { return SafeTensors::load(model(), path, false); }
-  virtual int64_t numLayers() = 0;
-  virtual int64_t contextSize() = 0;
+
+  int64_t numLayers() const { return dims_.numLayers; }
+  int64_t contextSize() const { return dims_.contextSize; }
+  int64_t numHeads() const { return dims_.numHeads; }
+  int64_t numKvHeads() const { return dims_.numKvHeads; }
+  int64_t headDim() const { return dims_.headDim; }
+  int64_t hiddenSize() const { return dims_.hiddenSize; }
+  tinytorch::Device device() const { return device_; }
+
   virtual tinytorch::nn::Module &model() = 0;
-  virtual tinytorch::Device device() const = 0;
 
  protected:
-  void init() { kvCache_.create(numLayers()); }
+  GPTModel(ModelDims dims, tinytorch::Device device) : dims_(dims), device_(device) {}
 
-  KVCacheManager kvCache_;
+  ModelDims dims_;
+  tinytorch::Device device_;
+  PagedKVCache *pagedCache_ = nullptr;
 };
 
 }  // namespace tinygpt

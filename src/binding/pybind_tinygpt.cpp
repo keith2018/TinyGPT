@@ -14,6 +14,10 @@ using namespace tinygpt;
 // clang-format off
 
 PYBIND11_MODULE(_tinygpt, m) {
+  // StreamState
+  py::class_<tokenizer::Tokenizer::StreamState>(m, "StreamState")
+      .def(py::init<>());
+
   // Tokenizer
   py::class_<tokenizer::Tokenizer>(m, "Tokenizer")
       .def(py::init<>())
@@ -21,10 +25,11 @@ PYBIND11_MODULE(_tinygpt, m) {
       .def("token_to_id", &tokenizer::Tokenizer::token2Id, py::arg("token"))
       .def("id_to_token", &tokenizer::Tokenizer::id2Token, py::arg("id"))
       .def("encode", &tokenizer::Tokenizer::encode, py::arg("text"), py::arg("allow_added_tokens") = true)
-      .def("encode_batch", py::overload_cast<const std::vector<std::string>&, uint32_t, bool>(&tokenizer::Tokenizer::encodeBatch), py::arg("texts"), py::arg("num_threads") = 8, py::arg("allow_added_tokens") = true)
-      .def("decode", py::overload_cast<const std::vector<int32_t>&, uint32_t>(&tokenizer::Tokenizer::decode), py::arg("ids"), py::arg("offset") = 0)
-      .def("decode_batch", py::overload_cast<const std::vector<std::vector<int32_t>>&, uint32_t>(&tokenizer::Tokenizer::decodeBatch), py::arg("ids"), py::arg("num_threads") = 8)
-      .def("decode_stream", py::overload_cast<const std::vector<int32_t>&>(&tokenizer::Tokenizer::decodeStream), py::arg("ids"))
+      .def("encode_batch", py::overload_cast<const std::vector<std::string>&, int32_t, bool>(&tokenizer::Tokenizer::encodeBatch), py::arg("texts"), py::arg("num_threads") = 8, py::arg("allow_added_tokens") = true)
+      .def("decode", py::overload_cast<const std::vector<int32_t>&, size_t>(&tokenizer::Tokenizer::decode), py::arg("ids"), py::arg("offset") = 0)
+      .def("decode_batch", py::overload_cast<const std::vector<std::vector<int32_t>>&, int32_t>(&tokenizer::Tokenizer::decodeBatch), py::arg("ids"), py::arg("num_threads") = 8)
+      .def("decode_stream", py::overload_cast<const std::vector<int32_t>&, tokenizer::Tokenizer::StreamState&>(&tokenizer::Tokenizer::decodeStream), py::arg("ids"), py::arg("state"))
+      .def_static("decode_stream_flush", &tokenizer::Tokenizer::decodeStreamFlush, py::arg("state"))
       .def_property_readonly("bos_token_id", &tokenizer::Tokenizer::bosTokenId)
       .def_property_readonly("eos_token_id", &tokenizer::Tokenizer::eosTokenId)
       .def_property_readonly("pad_token_id", &tokenizer::Tokenizer::padTokenId)

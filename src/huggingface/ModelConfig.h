@@ -13,7 +13,6 @@
 
 namespace tinygpt::huggingface::model {
 
-constexpr const char* MODEL_TYPE_GPT2 = "gpt2";
 constexpr const char* MODEL_TYPE_LLAMA = "llama";
 constexpr const char* MODEL_TYPE_QWEN2 = "qwen2";
 constexpr const char* MODEL_TYPE_QWEN3 = "qwen3";
@@ -23,7 +22,6 @@ struct ModelConfig {
   virtual ~ModelConfig() = default;
 
   std::string modelType;
-  std::string hiddenAct;
   tinytorch::DType torchDtype;
 
   int64_t vocabSize;
@@ -40,18 +38,7 @@ struct ModelConfig {
   bool tieWordEmbeddings;
 };
 
-struct GPT2Config : ModelConfig {
-  std::string activationFunction;
-  float layerNormEpsilon;
-  int64_t nCtx;
-  int64_t nEmbd;
-  int64_t nHead;
-  int64_t nLayer;
-  int64_t nPositions;
-};
-
 struct LlamaConfig : ModelConfig {
-  bool attentionBias;
   int64_t headDim;
 
   struct RopeScalingConfig {
@@ -59,7 +46,6 @@ struct LlamaConfig : ModelConfig {
     float highFreqFactor;
     float lowFreqFactor;
     int64_t originalMaxPositionEmbeddings;
-    std::string ropeType;
   } ropeScaling;
 
   float ropeTheta;
@@ -68,24 +54,19 @@ struct LlamaConfig : ModelConfig {
 struct QwenConfig : ModelConfig {
   float ropeTheta;
   int64_t headDim;
-  int64_t slidingWindow;
-  bool useSlidingWindow;
-  bool useMRope;
 };
 
 struct MistralConfig : ModelConfig {
   float ropeTheta;
-  int64_t slidingWindow;
-  bool useSlidingWindow;
 };
 
 struct GenerationConfig {
-  int64_t bosTokenId;
-  std::vector<int64_t> eosTokenIds;
+  int32_t bosTokenId;
+  std::vector<int32_t> eosTokenIds;
 
   bool doSample;
   float temperature;
-  int64_t topK;
+  int32_t topK;
   float topP;
 };
 

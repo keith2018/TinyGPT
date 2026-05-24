@@ -20,17 +20,20 @@ using Config = huggingface::model::QwenConfig;
 
 using Qwen3ForCausalLM = tt::nn::CausalLM<tt::nn::AttentionWithQKNorm, tt::nn::GatedMLP>;
 
-inline std::unique_ptr<Qwen3ForCausalLM> createModel(const Config &config, KVCacheManager &kvCache,
-                                                     tt::Options options) {
+inline std::unique_ptr<Qwen3ForCausalLM> createModel(const Config &config, tt::Options options) {
   tt::nn::AttentionConfig attnConfig{config.hiddenSize, config.numAttentionHeads, config.headDim,
                                      config.numKeyValueHeads};
 
-  auto attnFactory = [&](int layerIdx) {
-    auto rope = tt::nn::RoPE(config.headDim, config.maxPositionEmbeddings, config.ropeTheta, std::nullopt, options);
-    return tt::nn::AttentionWithQKNorm(&kvCache, layerIdx, attnConfig, std::move(rope), config.rmsNormEps, options);
+  auto ropeCache =
+      tinygpt::kernel::ropeInit(config.headDim, config.maxPositionEmbeddings, config.ropeTheta, nullptr, options);
+
+  auto attnFactory = [&](int64_t layerIdx) {
+    auto rope = tt::nn::RoPE(ropeCache);
+    return tt::nn::AttentionWithQKNorm(static_cast<size_t>(layerIdx), attnConfig, std::move(rope), config.rmsNormEps,
+                                       options);
   };
 
-  auto mlpFactory = [&](int /*layerIdx*/) {
+  auto mlpFactory = [&](int64_t /*layerIdx*/) {
     return tt::nn::GatedMLP(config.hiddenSize, config.intermediateSize, options);
   };
 
@@ -39,32 +42,27 @@ inline std::unique_ptr<Qwen3ForCausalLM> createModel(const Config &config, KVCac
                                             mlpFactory);
 }
 
+inline GPTModel::ModelDims makeDims(const Config &config) {
+  return {config.numHiddenLayers,   config.maxPositionEmbeddings,
+          config.numAttentionHeads, config.numKeyValueHeads,
+          config.headDim,           config.hiddenSize};
+}
+
 }  // namespace qwen3
 
 class ModelQwen3 : public GPTModel {
  public:
   ModelQwen3(const huggingface::model::QwenConfig &config, tinytorch::Device device)
-      : config_(config),
-        device_(device),
-        model_(qwen3::createModel(config_, kvCache_, tinytorch::Options(device, config.torchDtype))) {
-    init();
-  }
+      : GPTModel(qwen3::makeDims(config), device),
+        model_(qwen3::createModel(config, tinytorch::Options(device, config.torchDtype))) {}
 
   ~ModelQwen3() override = default;
 
-  GPTModelType type() override { return GPTModelType::QWEN3; }
-
-  int64_t numLayers() override { return config_.numHiddenLayers; }
-
-  int64_t contextSize() override { return config_.maxPositionEmbeddings; }
+  GPTModelType type() const override { return GPTModelType::QWEN3; }
 
   tinytorch::nn::Module &model() override { return *model_; }
 
-  tinytorch::Device device() const override { return device_; }
-
  private:
-  const huggingface::model::QwenConfig &config_;
-  tinytorch::Device device_;
   std::unique_ptr<tinytorch::nn::CausalLM<tinytorch::nn::AttentionWithQKNorm, tinytorch::nn::GatedMLP>> model_;
 };
 

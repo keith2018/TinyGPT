@@ -36,7 +36,7 @@ std::vector<std::string> ByteFallback::decode(const std::vector<std::string> &pi
         std::isxdigit(token[4])) {
       char *endPtr = nullptr;
       std::string hexPart = token.substr(3, 2);
-      unsigned long value = std::strtoul(hexPart.c_str(), &endPtr, 16);
+      auto value = std::strtoull(hexPart.c_str(), &endPtr, 16);
 
       if (*endPtr == '\0' && value <= 255) {
         previousBytes.push_back(static_cast<uint8_t>(value));

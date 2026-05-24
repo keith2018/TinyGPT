@@ -6,37 +6,37 @@
 
 #pragma once
 
-#include "Tensor.h"
+#include "kernel/SamplerOps.h"
 
 namespace tinygpt {
 
 struct SamplerConfig {
-  float temperature;
-  int64_t topK;
-  float topP;
-  float minP;
+  float temperature = 0.f;
+  int32_t topK = 0;
+  float topP = 1.f;
+  float minP = 0.f;
+
+  int64_t seed = -1;
 
   // NOLINTNEXTLINE(google-explicit-constructor)
-  SamplerConfig(float t = 0.f, int64_t k = 0, float tp = 1.f, float mp = 0.f)
-      : temperature(t), topK(k), topP(tp), minP(mp) {}
+  SamplerConfig(float t = 0.f, int32_t k = 0, float tp = 1.f, float mp = 0.f, int64_t s = -1)
+      : temperature(t), topK(k), topP(tp), minP(mp), seed(s) {}
 };
+
+kernel::SamplingParams toKernelParams(const SamplerConfig& cfg);
 
 class Sampler {
  public:
   explicit Sampler(const SamplerConfig& config);
-  virtual ~Sampler() = default;
+  ~Sampler() = default;
 
-  // logits: [batch, vocab_size]
-  virtual tinytorch::Tensor sample(const tinytorch::Tensor& logits);
+  const SamplerConfig& config() const { return config_; }
+  const kernel::SamplingParams& params() const { return params_; }
+  bool doSample() const { return doSample_; }
 
- protected:
+ private:
   SamplerConfig config_;
-
-  bool setTemperature_;
-  bool setTopK_;
-  bool setTopP_;
-  bool setMinP_;
-
+  kernel::SamplingParams params_;
   bool doSample_;
 };
 

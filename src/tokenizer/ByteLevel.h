@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <optional>
 #include <vector>
 
 #include "Base.h"
@@ -27,7 +28,7 @@ class ByteLevel : public Component {
 
   static const std::array<char32_t, 256> &alphabet() { return bytesChar_; }
   static std::string utf8ToBytes(std::string_view str);
-  static int32_t findIncompletePos(std::string_view str);
+  static std::optional<size_t> findIncompletePos(std::string_view str);
   static std::vector<std::string_view> splitUTF8(std::string_view str);
 
  private:

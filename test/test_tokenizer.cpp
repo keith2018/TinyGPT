@@ -10,7 +10,7 @@
 using namespace tinygpt;
 using Behavior = tokenizer::SplitDelimiterBehavior;
 
-TEST(TEST_tokenizer, pretokenize_split_removed) {
+TEST(tokenizer, pretokenize_split_removed) {
   auto text = "Hello,,, world! This is a test.";
 
   auto split = std::make_shared<tokenizer::Split>(",", Behavior::REMOVED);
@@ -19,7 +19,7 @@ TEST(TEST_tokenizer, pretokenize_split_removed) {
   EXPECT_EQ(expected, getStrings(actual));
 }
 
-TEST(TEST_tokenizer, pretokenize_split_isolated) {
+TEST(tokenizer, pretokenize_split_isolated) {
   auto text = "Hello,,, world! This is a test.";
 
   auto split = std::make_shared<tokenizer::Split>(",", Behavior::ISOLATED);
@@ -28,7 +28,7 @@ TEST(TEST_tokenizer, pretokenize_split_isolated) {
   EXPECT_EQ(expected, getStrings(actual));
 }
 
-TEST(TEST_tokenizer, pretokenize_split_merged_with_previous) {
+TEST(tokenizer, pretokenize_split_merged_with_previous) {
   auto text = "Hello,,, world! This is a test.";
 
   auto split = std::make_shared<tokenizer::Split>(",", Behavior::MERGED_WITH_PREVIOUS);
@@ -37,7 +37,7 @@ TEST(TEST_tokenizer, pretokenize_split_merged_with_previous) {
   EXPECT_EQ(expected, getStrings(actual));
 }
 
-TEST(TEST_tokenizer, pretokenize_split_merged_with_next) {
+TEST(tokenizer, pretokenize_split_merged_with_next) {
   auto text = "Hello,,, world! This is a test.";
 
   auto split = std::make_shared<tokenizer::Split>(",", Behavior::MERGED_WITH_NEXT);
@@ -46,7 +46,7 @@ TEST(TEST_tokenizer, pretokenize_split_merged_with_next) {
   EXPECT_EQ(expected, getStrings(actual));
 }
 
-TEST(TEST_tokenizer, pretokenize_split_contiguous) {
+TEST(tokenizer, pretokenize_split_contiguous) {
   auto text = "Hello,,, world! This is a test.";
 
   auto split = std::make_shared<tokenizer::Split>(",", Behavior::CONTIGUOUS);
@@ -55,7 +55,7 @@ TEST(TEST_tokenizer, pretokenize_split_contiguous) {
   EXPECT_EQ(expected, getStrings(actual));
 }
 
-TEST(TEST_tokenizer, pretokenize_bytelevel) {
+TEST(tokenizer, pretokenize_bytelevel) {
   auto text = "Hello,,, world! 你好 ";
 
   auto byteLevel = std::make_shared<tokenizer::ByteLevel>(true, true);
@@ -83,7 +83,7 @@ inline bool loadTokenizer(tokenizer::Tokenizer &tokenizer, const std::string &di
   return tokenizer.initWithConfig(dir + "/tokenizer.json", dir + "/tokenizer_config.json");
 }
 
-TEST(TEST_tokenizer, tokenizer_llama_31_8b) {
+TEST(tokenizer, tokenizer_llama_31_8b) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Llama-3.1-8B");
   EXPECT_TRUE(initOk);
@@ -108,7 +108,7 @@ TEST(TEST_tokenizer, tokenizer_llama_31_8b) {
   }
 }
 
-TEST(TEST_tokenizer, tokenizer_ds_r1_8b) {
+TEST(tokenizer, tokenizer_ds_r1_8b) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/DeepSeek-R1-Distill-Llama-8B");
   EXPECT_TRUE(initOk);
@@ -133,7 +133,7 @@ TEST(TEST_tokenizer, tokenizer_ds_r1_8b) {
   }
 }
 
-TEST(TEST_tokenizer, tokenizer_gpt2) {
+TEST(tokenizer, tokenizer_gpt2) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/gpt2");
   EXPECT_TRUE(initOk);
@@ -155,7 +155,7 @@ TEST(TEST_tokenizer, tokenizer_gpt2) {
   }
 }
 
-TEST(TEST_tokenizer, tokenizer_qwen2) {
+TEST(tokenizer, tokenizer_qwen2) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Qwen2.5-3B");
   EXPECT_TRUE(initOk);
@@ -181,7 +181,7 @@ TEST(TEST_tokenizer, tokenizer_qwen2) {
   }
 }
 
-TEST(TEST_tokenizer, tokenizer_qwen3) {
+TEST(tokenizer, tokenizer_qwen3) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Qwen3-0.6B");
   EXPECT_TRUE(initOk);
@@ -207,7 +207,7 @@ TEST(TEST_tokenizer, tokenizer_qwen3) {
   }
 }
 
-TEST(TEST_tokenizer, tokenizer_mistral_7b) {
+TEST(tokenizer, tokenizer_mistral_7b) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Mistral-7B-v0.3");
   EXPECT_TRUE(initOk);
@@ -231,7 +231,7 @@ TEST(TEST_tokenizer, tokenizer_mistral_7b) {
   }
 }
 
-TEST(TEST_tokenizer, tokenizer_batch) {
+TEST(tokenizer, tokenizer_batch) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/DeepSeek-R1-Distill-Llama-8B");
   EXPECT_TRUE(initOk);
@@ -247,7 +247,7 @@ TEST(TEST_tokenizer, tokenizer_batch) {
   EXPECT_TRUE(decodeRet == std::vector({decodeText, decodeText, decodeText}));
 }
 
-TEST(TEST_tokenizer, tokenizer_long_text) {
+TEST(tokenizer, tokenizer_long_text) {
   tokenizer::Tokenizer tokenizer;
   bool initOk = loadTokenizer(tokenizer, "assets/tokenizer/Llama-3.1-8B");
   EXPECT_TRUE(initOk);

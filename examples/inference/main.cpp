@@ -4,17 +4,18 @@
  *
  */
 
+#include <atomic>
+#include <condition_variable>
+#include <cstdio>
+#include <mutex>
+#include <queue>
+#include <thread>
+
 #include "Utils/Profiler.h"
 #include "Utils/Timer.h"
 #include "engine/GPTEngine.h"
-#include "util/StringUtils.h"
 
-const std::vector<std::string> INPUT_STRS = {
-    "Hello, my name is",
-    "The president of the United States is",
-    "The capital of France is",
-    "The future of AI is",
-};
+const std::string DEFAULT_INPUT = "The future of AI is";
 
 static void printUsage(const char* progName) {
   LOGI("Usage: %s [options]", progName);
@@ -25,6 +26,7 @@ static void printUsage(const char* progName) {
   LOGI("  --max-tokens <n>      Max new tokens (default: 32)");
   LOGI("  --temperature <f>     Sampling temperature (default: 0.8)");
   LOGI("  --top-p <f>           Top-p sampling (default: 0.9)");
+  LOGI("  --input <text>        Input prompt (default: '%s')", DEFAULT_INPUT.c_str());
   LOGI("  --help                Show this help message");
 }
 
@@ -35,6 +37,7 @@ int main(int argc, char** argv) {
   int maxTokens = 32;
   float temperature = 0.8f;
   float topP = 0.9f;
+  std::string input = DEFAULT_INPUT;
 
   for (int i = 1; i < argc; i++) {
     std::string arg = argv[i];
@@ -49,11 +52,13 @@ int main(int argc, char** argv) {
     } else if (arg == "--dtype" && i + 1 < argc) {
       dtype = argv[++i];
     } else if (arg == "--max-tokens" && i + 1 < argc) {
-      maxTokens = std::atoi(argv[++i]);
+      maxTokens = static_cast<int>(std::strtol(argv[++i], nullptr, 10));
     } else if (arg == "--temperature" && i + 1 < argc) {
       temperature = std::strtof(argv[++i], nullptr);
     } else if (arg == "--top-p" && i + 1 < argc) {
       topP = std::strtof(argv[++i], nullptr);
+    } else if (arg == "--input" && i + 1 < argc) {
+      input = argv[++i];
     } else {
       LOGE("Unknown argument: %s", arg.c_str());
       printUsage(argv[0]);
@@ -96,22 +101,70 @@ int main(int argc, char** argv) {
 
   tinytorch::Timer timer;
   timer.start();
-
   PROFILE_START();
-  auto output = engine.generateSync(INPUT_STRS);
-  PROFILE_STOP();
 
-  LOGI("Generated Outputs:");
-  LOGI("------------------------------------------------------------");
-  for (auto i = 0; i < output.batch; i++) {
-    LOGI("Prompt:    '%s'", INPUT_STRS[i].c_str());
-    LOGI("Output:    '%s'", tinygpt::StringUtils::repr(output.texts[i]).c_str());
-    LOGI("------------------------------------------------------------");
+  LOGI("Prompt: '%s'", input.c_str());
+  LOGI("Streaming output:");
+
+  std::mutex printMutex;
+  std::condition_variable printCV;
+  std::queue<std::string> printQueue;
+  std::atomic<bool> generationDone{false};
+
+  std::thread printer([&]() {
+    while (true) {
+      std::string chunk;
+      {
+        std::unique_lock<std::mutex> lock(printMutex);
+        printCV.wait(lock, [&] { return !printQueue.empty() || generationDone.load(); });
+        if (printQueue.empty() && generationDone.load()) {
+          break;
+        }
+        chunk = std::move(printQueue.front());
+        printQueue.pop();
+      }
+      std::fwrite(chunk.data(), 1, chunk.size(), stdout);
+      std::fflush(stdout);
+    }
+  });
+
+  int tokenCount = 0;
+  auto output = engine.generate(input, [&](const std::string& tokenText) -> bool {
+    tokenCount++;
+    {
+      std::lock_guard<std::mutex> lock(printMutex);
+      printQueue.push(tokenText);
+    }
+    printCV.notify_one();
+    return true;
+  });
+
+  generationDone.store(true);
+  printCV.notify_all();
+  printer.join();
+
+  // flush stream output
+  std::fputc('\n', stdout);
+  std::fflush(stdout);
+
+  const char* reasonStr = "Unknown";
+  switch (output.finishReason) {
+    case tinygpt::FinishReason::Stop:
+      reasonStr = "Stop";
+      break;
+    case tinygpt::FinishReason::Length:
+      reasonStr = "Length";
+      break;
+    case tinygpt::FinishReason::Aborted:
+      reasonStr = "Aborted";
+      break;
   }
+  LOGI("Finish reason: %s", reasonStr);
 
+  PROFILE_STOP();
   timer.mark();
-  LOGI("Time cost: %lld ms, speed: %.2f token/s", timer.elapseMillis(),
-       output.tokenIds.size() * 1000.0f / timer.elapseMillis());
+  LOGI("Time cost: %lld ms, tokens: %d, speed: %.2f token/s", timer.elapseMillis(), tokenCount,
+       tokenCount * 1000.0f / timer.elapseMillis());
 
   return 0;
 }

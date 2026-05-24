@@ -35,28 +35,34 @@ class Tokenizer {
   std::string id2Token(int32_t id);
 
   std::vector<int32_t> encode(const std::string& text, bool allowAddedTokens = true);
-  std::vector<std::vector<int32_t>> encodeBatch(const std::vector<std::string>& texts, uint32_t numThreads = 8,
+  std::vector<std::vector<int32_t>> encodeBatch(const std::vector<std::string>& texts, int32_t numThreads = 8,
                                                 bool allowAddedTokens = true);
-  std::vector<std::vector<int32_t>> encodeBatch(tinytorch::ArrayView<std::string> texts, uint32_t numThreads = 8,
+  std::vector<std::vector<int32_t>> encodeBatch(tinytorch::ArrayView<std::string> texts, int32_t numThreads = 8,
                                                 bool allowAddedTokens = true);
 
-  std::string decode(const std::vector<int32_t>& ids, uint32_t offset = 0);
-  std::string decode(tinytorch::ArrayView<int32_t> ids, uint32_t offset = 0);
+  std::string decode(const std::vector<int32_t>& ids, size_t offset = 0);
+  std::string decode(tinytorch::ArrayView<int32_t> ids, size_t offset = 0);
 
-  std::vector<std::string> decodeBatch(const std::vector<std::vector<int32_t>>& ids, uint32_t numThreads = 8);
-  std::vector<std::string> decodeBatch(tinytorch::ArrayView<tinytorch::ArrayView<int32_t>> ids,
-                                       uint32_t numThreads = 8);
-  std::vector<std::string> decodeBatch(const std::vector<int32_t>& ids, uint32_t batch, uint32_t offset = 0,
-                                       uint32_t numThreads = 8);
-  std::vector<std::string> decodeBatch(tinytorch::ArrayView<int32_t> ids, uint32_t batch, uint32_t offset = 0,
-                                       uint32_t numThreads = 8);
+  std::vector<std::string> decodeBatch(const std::vector<std::vector<int32_t>>& ids, int32_t numThreads = 8);
+  std::vector<std::string> decodeBatch(tinytorch::ArrayView<tinytorch::ArrayView<int32_t>> ids, int32_t numThreads = 8);
+  std::vector<std::string> decodeBatch(const std::vector<int32_t>& ids, size_t batch, size_t offset = 0,
+                                       int32_t numThreads = 8);
+  std::vector<std::string> decodeBatch(tinytorch::ArrayView<int32_t> ids, size_t batch, size_t offset = 0,
+                                       int32_t numThreads = 8);
 
-  // check whether the utf-8 sequence is complete, if not, return it on the next call.
-  std::string decodeStream(const std::vector<int32_t>& ids);
-  std::string decodeStream(tinytorch::ArrayView<int32_t> ids);
+  // per-stream state for incremental UTF-8 safe decoding.
+  struct StreamState {
+    struct TokenCache {
+      int32_t id;
+      int32_t len;
+    };
+    std::vector<TokenCache> tokens;
+    std::string bytes;
+  };
 
-  // flush remaining bytes in stream cache
-  std::string decodeStreamFlush();
+  std::string decodeStream(const std::vector<int32_t>& ids, StreamState& state);
+  std::string decodeStream(tinytorch::ArrayView<int32_t> ids, StreamState& state);
+  static std::string decodeStreamFlush(StreamState& state);
 
   int32_t bosTokenId() const { return bosTokenId_; }
   int32_t eosTokenId() const { return eosTokenId_; }
@@ -77,7 +83,7 @@ class Tokenizer {
 
   void workerThread();
   template <typename Input, typename Output, typename Func>
-  void parallelFor(tinytorch::ArrayView<Input> inputs, std::vector<Output>& outputs, Func func, uint32_t numThreads);
+  void parallelFor(tinytorch::ArrayView<Input> inputs, std::vector<Output>& outputs, Func func, int32_t numThreads);
 
   std::unique_ptr<Component> normalizer_;
   std::unique_ptr<Component> preTokenizer_;
@@ -91,14 +97,6 @@ class Tokenizer {
 
   bool addBosToken_ = false;
   bool addEosToken_ = false;
-
-  // stream decode cache
-  struct TokenStreamCache {
-    int32_t id;
-    size_t len;
-  };
-  std::vector<TokenStreamCache> streamCacheToken_;
-  std::string streamCacheStr_;
 
   // added tokens
   std::string addedPattern_;
