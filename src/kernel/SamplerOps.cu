@@ -22,7 +22,6 @@ namespace tinygpt::kernel {
 
 static constexpr int kSampleThreadsPerBlock = 256;
 
-// ref: FlashInfer
 __device__ __forceinline__ float ieeeMul(float a, float b) {
   float r;
   asm("mul.rn.f32 %0, %1, %2;" : "=f"(r) : "f"(a), "f"(b));
@@ -123,8 +122,6 @@ struct MinOp {
   __device__ __forceinline__ float operator()(float a, float b) const { return (a < b) ? a : b; }
 };
 
-// Bitonic sort descending by key, in shared memory.
-// N must be a power of 2 and equal BLOCK_THREADS (one element per thread).
 template <int N>
 __device__ __forceinline__ void bitonicSortDescending(float* __restrict__ sKeys, unsigned int* __restrict__ sVals) {
   const unsigned int tid = threadIdx.x;
@@ -132,8 +129,6 @@ __device__ __forceinline__ void bitonicSortDescending(float* __restrict__ sKeys,
     for (int j = k >> 1; j > 0; j >>= 1) {
       const unsigned int ixj = tid ^ j;
       if (ixj > tid) {
-        // For a full descending sort: swap if element at tid < element at ixj
-        // in the first half of the bitonic merge, don't swap in the second half.
         const bool descending = ((tid & k) == 0);
         const bool needSwap = descending ? (sKeys[tid] < sKeys[ixj]) : (sKeys[tid] > sKeys[ixj]);
         if (needSwap) {
@@ -286,39 +281,23 @@ __device__ __forceinline__ void fusedSampleBody(const T* __restrict__ logits, in
 
   curand_init(seed, row, globalSeq, &state);
 
-  // ========================================================================
-  // FAST PATH: Implicit top-K via per-thread partition winners (shared memory only)
-  // ========================================================================
-  // When vocab > BLOCK_THREADS and temperature is moderate (≤ 2.0), the 256
-  // per-thread partition-max values capture >99.99% of the probability mass.
-  // We do softmax + sort + top-P entirely in shared memory, avoiding any
-  // global memory workspace allocation.
-  // ========================================================================
   {
-    // Phase 1: Populate candidates from the argmax pass (already done above)
     sCandVid[tid] = threadBest.idx;
     sCand.key[tid] = threadBest.key;
     __syncthreads();
 
-    // Phase 2a: Tail-mass safety check
-    // Compute the minimum logit among our 256 candidates.
     float minCandLogit = ReduceFloat(sTemp.prim.reduceFloat).Reduce(threadBest.key, MinOp{});
     if (tid == 0) sTemp.scalar = minCandLogit;
     __syncthreads();
     minCandLogit = sTemp.scalar;
 
-    // Upper-bound on missed probability mass:
-    //   sum_{i not in candidates} softmax(l_i/T) ≤ (V - 256) * exp((minCand - max) / T)
     const int tailCount = vocab > BLOCK_THREADS ? (vocab - BLOCK_THREADS) : 0;
     const float tailBound = static_cast<float>(tailCount) * __expf((minCandLogit - maxLogit) * invT);
 
     if (tailBound > 0.01f) {
-      // Extremely rare: temperature is very high or distribution nearly uniform.
-      // Fall through to the exact global-memory path below.
       goto exact_global_path;
     }
 
-    // Phase 2b: Softmax over 256 candidates in shared memory
     {
       float localExp = __expf((sCand.key[tid] - maxLogit) * invT);
       sCand.key[tid] = localExp;
@@ -332,17 +311,12 @@ __device__ __forceinline__ void fusedSampleBody(const T* __restrict__ logits, in
       __syncthreads();
     }
 
-    // Phase 2c: Bitonic sort descending by probability
     bitonicSortDescending<BLOCK_THREADS>(sCand.key, sCandVid);
-    // Now: sCand.key[0] >= sCand.key[1] >= ... (normalized probs)
-    //      sCandVid[i] = vocab index of the i-th most probable candidate
 
-    // Phase 3a: Top-P + Min-P filtering
     {
       int keep = BLOCK_THREADS;
 
       if (useTopP) {
-        // Inclusive prefix sum over sorted probabilities to find CDF
         float myProb = sCand.key[tid];
         float cumProb;
         cub::BlockScan<float, BLOCK_THREADS>(sTemp.prim.scan).InclusiveSum(myProb, cumProb);
@@ -350,7 +324,6 @@ __device__ __forceinline__ void fusedSampleBody(const T* __restrict__ logits, in
         if (tid == 0) sTemp.sampledId = BLOCK_THREADS;  // sentinel
         __syncthreads();
 
-        // Find the first index where cumulative probability >= topP
         if (myProb > 0.f && cumProb >= p.topP) {
           atomicMin(&sTemp.sampledId, static_cast<int>(tid));
         }
@@ -361,7 +334,6 @@ __device__ __forceinline__ void fusedSampleBody(const T* __restrict__ logits, in
 
       if (useMinP) {
         const float thresh = sCand.key[0] * p.minP;
-        // Sorted descending, so find the first index below threshold.
         if (tid == 0) sTemp.lastValidId = keep;  // sentinel
         __syncthreads();
         if (tid < keep && sCand.key[tid] < thresh) {
@@ -378,7 +350,6 @@ __device__ __forceinline__ void fusedSampleBody(const T* __restrict__ logits, in
     }
     __syncthreads();
 
-    // Phase 3b: Gumbel-max sampling over surviving candidates
     {
       KeyValPair best = {-INFINITY, 0};
       for (unsigned int i = tid; i < static_cast<unsigned int>(sKeep); i += BLOCK_THREADS) {
@@ -395,18 +366,9 @@ __device__ __forceinline__ void fusedSampleBody(const T* __restrict__ logits, in
     return;
   }
 
-  // ========================================================================
-  // EXACT FALLBACK PATH: Full-vocabulary processing in global memory
-  // ========================================================================
-  // Used only when tail-mass check fails (T > ~2.0 with near-uniform logits).
-  // This is the original implementation with proven correctness.
-  // Requires probsWs (rowProbs) to be non-null. If it is null (should not
-  // happen for T > 2.0, but guard defensively), fall back to argmax.
-  // ========================================================================
 exact_global_path:
 
   if (rowProbs == nullptr) {
-    // Defensive fallback: no workspace available, emit argmax.
     if (tid == 0) output[row] = static_cast<int64_t>(globalBest.idx);
     return;
   }
@@ -541,8 +503,6 @@ __global__ void kFusedSampleBroadcast(const T* __restrict__ logits, int64_t* __r
   fusedSampleBody<T>(logits, output, probsWs, p, vocab, globalSeed, globalSeq);
 }
 
-// Graph-capturable variant: reads globalSeq from a device pointer so the value
-// can be updated via H2D memcpy between CUDA Graph replays.
 template <typename T>
 __global__ void kFusedSampleGraphable(const T* __restrict__ logits, int64_t* __restrict__ output,
                                       float* __restrict__ probsWs, SamplingParams p, int vocab, uint64_t globalSeed,
@@ -554,8 +514,6 @@ namespace {
 
 bool mayUsePathA(const SamplingParams& q) { return (q.temperature > 0.f) && (q.topK <= 0); }
 
-// The fast implicit-top-K path avoids global workspace for moderate temperatures.
-// Only allocate workspace when the fallback might be triggered (T > 2.0).
 bool mayNeedFallbackWorkspace(const SamplingParams& q) { return mayUsePathA(q) && (q.temperature > 2.0f); }
 
 float* acquireProbsWorkspace(const tinytorch::Tensor& logits, int32_t batch, int vocab) {
@@ -661,10 +619,7 @@ void fusedSampleGraphable(const tinytorch::Tensor& logits, tinytorch::Tensor& ou
   ASSERT(output.size(0) == batch && output.size(1) == 1);
   ASSERT(devGlobalSeqPtr != nullptr);
 
-  // Note: workspace is not needed for typical temperature (≤ 2.0) since
-  // the fast implicit-top-K path uses only shared memory.
   float* wsPtr = nullptr;
-
   auto& stream = tinytorch::cuda::getCurrentCUDAStream(logits.device().index);
   TINYGPT_DISPATCH_FLOAT_DTYPE(logits, {
     kFusedSampleGraphable<CudaT><<<batch, kSampleThreadsPerBlock, 0, stream.stream()>>>(

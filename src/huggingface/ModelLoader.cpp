@@ -10,7 +10,7 @@
 #include "model/ModelMistral.h"
 #include "model/ModelQwen2.h"
 #include "model/ModelQwen3.h"
-#include "util/PathUtils.h"
+#include "util/FileUtils.h"
 
 namespace tinygpt::huggingface {
 
@@ -23,14 +23,14 @@ constexpr const char* kModelIndexPath = "model.safetensors.index.json";
 
 bool ModelLoader::load(const std::string& dir, tinytorch::Device device, tinytorch::DType dtype) {
   // model config
-  context_.modelConfig = model::loadModelConfig(PathUtils::joinPath(dir, kModelConfigPath));
+  context_.modelConfig = model::loadModelConfig(fileutil::join(dir, kModelConfigPath));
   if (!context_.modelConfig) {
     LOGE("Failed to load model config: %s", kModelConfigPath);
     return false;
   }
 
   // generation config
-  context_.generationConfig = model::loadGenerationConfig(PathUtils::joinPath(dir, kGenerationConfigPath));
+  context_.generationConfig = model::loadGenerationConfig(fileutil::join(dir, kGenerationConfigPath));
   if (!context_.generationConfig) {
     LOGE("Failed to load generation config: %s", kGenerationConfigPath);
     return false;
@@ -38,8 +38,8 @@ bool ModelLoader::load(const std::string& dir, tinytorch::Device device, tinytor
 
   // tokenizer
   context_.tokenizer = std::make_unique<tokenizer::Tokenizer>();
-  bool success = context_.tokenizer->initWithConfig(PathUtils::joinPath(dir, kTokenizerPath),
-                                                    PathUtils::joinPath(dir, kTokenizerConfigPath));
+  bool success = context_.tokenizer->initWithConfig(fileutil::join(dir, kTokenizerPath),
+                                                    fileutil::join(dir, kTokenizerConfigPath));
   if (!success) {
     LOGE("Failed to load tokenizer");
     return false;
@@ -65,9 +65,9 @@ bool ModelLoader::load(const std::string& dir, tinytorch::Device device, tinytor
 
   // load model from file
   LOGI("Load model ...");
-  auto modelPath = PathUtils::joinPath(dir, kModelPath);
-  if (!PathUtils::fileExists(modelPath)) {
-    modelPath = PathUtils::joinPath(dir, kModelIndexPath);
+  auto modelPath = fileutil::join(dir, kModelPath);
+  if (!fileutil::exists(modelPath)) {
+    modelPath = fileutil::join(dir, kModelIndexPath);
   }
   success = context_.model->load(modelPath);
   if (!success) {

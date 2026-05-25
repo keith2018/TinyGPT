@@ -27,7 +27,7 @@ struct ServerConfig {
   int32_t maxBatchTokens = 8192;
 
   int32_t prefillChunkSize = 512;
-  int32_t maxGraphBatch = 128;
+  int32_t maxGraphBatch = 64;
 
   std::string chatTemplate;
 };

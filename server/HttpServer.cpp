@@ -7,7 +7,7 @@
 #include "HttpServer.h"
 
 #include "ChatTemplateUtils.h"
-#include "util/PathUtils.h"
+#include "util/FileUtils.h"
 
 namespace tinygpt::server {
 
@@ -27,8 +27,8 @@ bool HttpServer::start(const ServerConfig& config) {
 
   // load tokenizer (for chat template)
   tokenizer_ = std::make_unique<tokenizer::Tokenizer>();
-  std::string tokenizerPath = PathUtils::joinPath(config_.modelDir, "tokenizer.json");
-  std::string tokenizerCfgPath = PathUtils::joinPath(config_.modelDir, "tokenizer_config.json");
+  std::string tokenizerPath = fileutil::join(config_.modelDir, "tokenizer.json");
+  std::string tokenizerCfgPath = fileutil::join(config_.modelDir, "tokenizer_config.json");
   if (!tokenizer_->initWithConfig(tokenizerPath, tokenizerCfgPath)) {
     LOGE("HttpServer: failed to load tokenizer from: %s", config_.modelDir.c_str());
     return false;
@@ -107,7 +107,7 @@ void HttpServer::setupStaticFiles() const {
         "../server/web",  // running from build/
     };
     for (const auto& candidate : candidates) {
-      if (PathUtils::fileExists(PathUtils::joinPath(candidate, "index.html"))) {
+      if (fileutil::exists(fileutil::join(candidate, "index.html"))) {
         webDir = candidate;
         break;
       }

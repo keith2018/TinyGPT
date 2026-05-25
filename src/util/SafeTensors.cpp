@@ -14,7 +14,7 @@
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
-#include "util/PathUtils.h"
+#include "util/FileUtils.h"
 
 namespace tinygpt {
 
@@ -263,9 +263,9 @@ bool SafeTensors::loadMulti(tt::nn::Module& module, const std::string& indexPath
   }
 
   bool success = true;
-  std::string baseDir = PathUtils::getBaseDir(indexPath);
+  std::string indexDir = fileutil::baseDir(indexPath);
   for (const auto& [shardFile, keys] : shard2keys) {
-    std::string shardPath = PathUtils::joinPath(baseDir, shardFile);
+    std::string shardPath = fileutil::join(indexDir, shardFile);
 
     ankerl::unordered_dense::set<std::string> keySet(keys.begin(), keys.end());
     if (!loadInternal(module, shardPath, false, keySet)) {

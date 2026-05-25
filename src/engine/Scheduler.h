@@ -67,11 +67,12 @@ class Scheduler {
   size_t numRunning() const { return runningCount_.load(); }
 
  private:
-  struct Seq {
-    uint64_t cacheId = 0;
+  // per-request state
+  struct GenSession {
+    uint64_t kvSeqId = 0;
     std::vector<int32_t> promptIds;
-    int32_t pastLen = 0;
-    int32_t numPromptProcessed = 0;
+    int32_t numCachedTokens = 0;
+    int32_t numPromptForwarded = 0;
     std::vector<int32_t> generatedIds;
     int32_t lastToken = 0;
     Sampler sampler;
@@ -84,17 +85,17 @@ class Scheduler {
     FinishReason finishReason = FinishReason::Length;
     std::shared_ptr<std::promise<GenResult>> promise;
 
-    explicit Seq(SamplerConfig cfg) : sampler(cfg) {}
+    explicit GenSession(SamplerConfig cfg) : sampler(cfg) {}
   };
 
   void workerLoop();
-  void runStep(std::vector<std::shared_ptr<Seq>>& active);
+  void runStep(std::vector<std::shared_ptr<GenSession>>& active);
   void harvestTokenIds();
   void processCallbacks();
-  void completeSeq(std::shared_ptr<Seq>& seq);
-  void sweepFinished(std::vector<std::shared_ptr<Seq>>& active);
-  bool admitWaiting(std::vector<std::shared_ptr<Seq>>& active);
-  bool isEos(const Seq& seq, int32_t tokenId) const;
+  void completeSession(std::shared_ptr<GenSession>& session);
+  void retireFinished(std::vector<std::shared_ptr<GenSession>>& active);
+  void admitWaiting(std::vector<std::shared_ptr<GenSession>>& active);
+  bool isStopToken(const GenSession& session, int32_t tokenId) const;
 
   void allocateMetaBuffers();
 
@@ -109,44 +110,38 @@ class Scheduler {
   int32_t prefillChunkSize_;
   tinytorch::Device device_;
 
-  // pre-allocated split-kv tmp buffers
-  tinytorch::Tensor tmpO_;
-  tinytorch::Tensor tmpLse_;
+  tinytorch::Tensor splitKvO_;
+  tinytorch::Tensor splitKvLse_;
 
-  tinytorch::Tensor hostI64_;      // pinned CPU, Int64
-  tinytorch::Tensor devI64_;       // CUDA, Int64
-  tinytorch::Tensor hostI32_;      // pinned CPU, Int32
-  tinytorch::Tensor devI32_;       // CUDA, Int32
-  tinytorch::Tensor sampledHost_;  // Int64 [maxBatchTokens_]
+  tinytorch::Tensor metaHostI64_;
+  tinytorch::Tensor metaDevI64_;
+  tinytorch::Tensor metaHostI32_;
+  tinytorch::Tensor metaDevI32_;
 
   struct PrevStep {
-    std::vector<std::shared_ptr<Seq>> seqs;
+    std::vector<std::shared_ptr<GenSession>> sessions;
     int32_t scheduledBatch = 0;
-    bool valid = false;
+    bool hasPendingHarvest = false;
   };
   PrevStep prev_;
 
-  // deferred streaming callbacks — filled by harvestTokenIds(), drained by processCallbacks()
   struct PendingCallback {
-    std::shared_ptr<Seq> seq;
+    std::shared_ptr<GenSession> session;
     int32_t tokenId;
   };
   std::vector<PendingCallback> pendingCallbacks_;
 
-  struct CudaPipeState;
-  std::unique_ptr<CudaPipeState> cudaPipe_;
+  std::unique_ptr<BatchSampler> batchSampler_;
 
-  // cuda graph runners — captures at batch sizes [1,2,4,8,16,24,...,maxGraphBatch_]
   std::vector<int32_t> graphBatchSizes_;
   std::unordered_map<int32_t, std::unique_ptr<CUDAGraphRunner>> graphRunners_;
   int32_t maxGraphBatch_ = 64;
 
-  // dummy KV block: padding sequences scatter KV here to avoid corrupting real data
-  int32_t dummyBlockId_ = -1;
+  int32_t padKvBlockId_ = -1;
 
   mutable std::mutex waitMutex_;
   std::condition_variable waitCV_;
-  std::deque<std::shared_ptr<Seq>> waiting_;
+  std::deque<std::shared_ptr<GenSession>> waiting_;
   std::atomic<bool> running_{false};
   std::atomic<size_t> runningCount_{0};
   std::thread worker_;

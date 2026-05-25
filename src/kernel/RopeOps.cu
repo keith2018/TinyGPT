@@ -110,23 +110,22 @@ template <typename T>
 __global__ void kRopeApplyImpl(const T* __restrict__ input, const float* __restrict__ ropeCache,
                                const int64_t* __restrict__ positions, T* __restrict__ output, int numHeads,
                                int headDim) {
-  // grid: (totalTokens, numHeads), block: (min(threads, halfDim))
-  const int tokenIdx = blockIdx.x;
-  const int headIdx = blockIdx.y;
-  const int halfDim = headDim >> 1;
+  const unsigned int tokenIdx = blockIdx.x;
+  const unsigned int headIdx = blockIdx.y;
+  const unsigned int halfDim = headDim >> 1;
 
   const int64_t pos = positions[tokenIdx];
   const float* ropeRow = ropeCache + pos * headDim * 2;
 
-  const int base = tokenIdx * numHeads * headDim + headIdx * headDim;
+  const unsigned int base = tokenIdx * numHeads * headDim + headIdx * headDim;
   const T* xPtr = input + base;
   T* yPtr = output + base;
 
-  for (int i = threadIdx.x; i < halfDim; i += blockDim.x) {
-    const float x1 = static_cast<float>(xPtr[i]);
-    const float x2 = static_cast<float>(xPtr[halfDim + i]);
+  for (unsigned int i = threadIdx.x; i < halfDim; i += blockDim.x) {
+    const auto x1 = static_cast<float>(xPtr[i]);
+    const auto x2 = static_cast<float>(xPtr[halfDim + i]);
 
-    const int idx = i * 2;
+    const unsigned int idx = i * 2;
     const float c = ropeRow[idx];      // cos
     const float s = ropeRow[idx + 1];  // sin
 
@@ -182,9 +181,6 @@ static void ropeApplyInplaceImpl(tinytorch::Tensor& input, const tinytorch::Tens
   const dim3 block(std::min(kThreadsPerBlock, headDim / 2));
 
   auto stream = tinytorch::cuda::getCurrentCUDAStream(input.device().index).stream();
-  // The kernel reads x1, x2 from input first, then writes to output.
-  // When output == input (in-place), this is safe because each thread reads
-  // its own (i, halfDim+i) pair before writing to those same locations.
   kRopeApplyImpl<CudaT><<<grid, block, 0, stream>>>(input.dataPtr<CudaT>(), ropeCache.dataPtr<float>(),
                                                     positions.dataPtr<int64_t>(), input.dataPtr<CudaT>(), numHeads,
                                                     headDim);

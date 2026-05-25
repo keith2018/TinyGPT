@@ -29,12 +29,8 @@ struct GPTConfig {
   PagedKVCacheConfig pagedConfig;
   int32_t maxNewTokens = 16;
   int32_t maxBatchTokens = 8192;
-
-  // chunked prefill: max prefill tokens per step per sequence
   int32_t prefillChunkSize = 512;
-
-  // max batch size for CUDA graph capture
-  int32_t maxGraphBatch = 128;
+  int32_t maxGraphBatch = 64;
 };
 
 struct GPTOutput {

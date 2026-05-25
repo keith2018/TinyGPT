@@ -39,25 +39,25 @@ PagedKVCacheSizing PagedKVCache::autoSize(const GPTModel& model, tt::DType dtype
   ASSERT(cfg.maxSeqLen > 0);
   ASSERT(model.device().isCuda());
 
-  const int64_t L = model.numLayers();
-  const int64_t Hk = model.numKvHeads();
-  const int64_t D = model.headDim();
-  const int64_t elemBytes = static_cast<int64_t>(tt::dtypeSize(dtype));
+  const auto L = model.numLayers();
+  const auto Hk = model.numKvHeads();
+  const auto D = model.headDim();
+  const auto elemBytes = static_cast<int64_t>(tt::dtypeSize(dtype));
 
   const int64_t bytesPerBlock = 2LL * L * Hk * cfg.blockSize * D * elemBytes;
   ASSERT(bytesPerBlock > 0);
 
-  int64_t numBlocks = cfg.numBlocks;
+  auto numBlocks = cfg.numBlocks;
   if (numBlocks <= 0) {
-    int64_t freeBytes = queryFreeBytes(model.device());
+    auto freeBytes = queryFreeBytes(model.device());
     ASSERT(freeBytes > cfg.reserveBytes && "not enough free VRAM for paged KV cache; reduce reserveBytes");
-    int64_t avail = static_cast<int64_t>(static_cast<double>(freeBytes - cfg.reserveBytes) * cfg.memoryUtil);
+    auto avail = static_cast<int64_t>(static_cast<double>(freeBytes - cfg.reserveBytes) * cfg.memoryUtil);
     ASSERT(avail > 0);
     numBlocks = avail / bytesPerBlock;
     ASSERT(numBlocks > 0 && "auto-sized numBlocks == 0; reduce reserveBytes / blockSize / dtype");
   }
 
-  int32_t maxBlocksPerSeq = static_cast<int32_t>((cfg.maxSeqLen + cfg.blockSize - 1) / cfg.blockSize);
+  auto maxBlocksPerSeq = static_cast<int32_t>((cfg.maxSeqLen + cfg.blockSize - 1) / cfg.blockSize);
 
   LOGI("PagedKVCache: sizing  blockSize=%d  numBlocks=%" PRId64 "  (%.2f GiB total KV pool)  maxBlocksPerSeq=%d",
        cfg.blockSize, numBlocks, static_cast<double>(numBlocks * bytesPerBlock) / (1024.0 * 1024.0 * 1024.0),
@@ -130,9 +130,9 @@ bool PagedKVCache::appendTokens(SeqId seqId, int32_t numTokens, std::vector<int3
   ASSERT(it != seqs_.end() && "appendTokens on unknown seqId");
   auto& st = it->second;
 
-  int64_t newSeqLen = static_cast<int64_t>(st.seqLen) + numTokens;
-  int32_t needBlocks = static_cast<int32_t>((newSeqLen + blockSize_ - 1) / blockSize_);
-  int32_t haveBlocks = static_cast<int32_t>(st.blocks.size());
+  auto newSeqLen = static_cast<int64_t>(st.seqLen) + numTokens;
+  auto needBlocks = static_cast<int32_t>((newSeqLen + blockSize_ - 1) / blockSize_);
+  auto haveBlocks = static_cast<int32_t>(st.blocks.size());
 
   ASSERT(needBlocks <= maxBlocksPerSeq_ && "sequence exceeds maxSeqLen");
 
@@ -151,10 +151,10 @@ bool PagedKVCache::appendTokens(SeqId seqId, int32_t numTokens, std::vector<int3
   outSlots.clear();
   outSlots.reserve(static_cast<size_t>(numTokens));
   for (int32_t i = 0; i < numTokens; i++) {
-    int64_t tokPos = static_cast<int64_t>(st.seqLen) + i;
-    int64_t blockIdx = tokPos / blockSize_;
-    int32_t blockOff = static_cast<int32_t>(tokPos % blockSize_);
-    int32_t blockId = st.blocks[static_cast<size_t>(blockIdx)];
+    auto tokPos = static_cast<int64_t>(st.seqLen) + i;
+    auto blockIdx = tokPos / blockSize_;
+    auto blockOff = static_cast<int32_t>(tokPos % blockSize_);
+    auto blockId = st.blocks[static_cast<size_t>(blockIdx)];
     outSlots.push_back(blockId * blockSize_ + blockOff);
   }
   st.seqLen += numTokens;

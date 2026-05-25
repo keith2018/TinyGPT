@@ -22,7 +22,7 @@ struct PagedKVCacheConfig {
   int64_t maxSeqLen = 4096;
   int64_t numBlocks = 0;
   float memoryUtil = 0.85f;
-  int64_t reserveBytes = 512LL << 20;  // 512 MiB
+  int64_t reserveBytes = 1024LL << 20;  // 1024 MiB
 };
 
 struct PagedKVCacheSizing {
