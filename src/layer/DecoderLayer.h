@@ -14,6 +14,8 @@ namespace tinytorch::nn {
 template <typename AttentionType, typename MLPType>
 class DecoderLayer : public Module {
  public:
+  using Module::forward;
+
   DecoderLayer(AttentionType &&selfAttn, MLPType &&mlp, RMSNorm &&inputLayerNorm, RMSNorm &&postAttnLayerNorm)
       : selfAttn_(std::move(selfAttn)),
         mlp_(std::move(mlp)),

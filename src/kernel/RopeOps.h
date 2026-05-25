@@ -39,9 +39,6 @@ tinytorch::Tensor ropeInit(int64_t headDim, int64_t contextLength, float thetaBa
 tinytorch::Tensor ropeApply(const tinytorch::Tensor& input, const tinytorch::Tensor& ropeCache,
                             const tinytorch::Tensor& positions);
 
-// In-place variant: applies RoPE rotation directly to the input tensor.
-// Avoids allocating a new output tensor — useful for Q in decode where the
-// input is consumed immediately after and need not be preserved.
 void ropeApplyInplace(tinytorch::Tensor& input, const tinytorch::Tensor& ropeCache, const tinytorch::Tensor& positions);
 
 }  // namespace tinygpt::kernel

@@ -19,15 +19,23 @@ inline constexpr int64_t kGlobalSeed = -1;
 struct SamplingParams {
   int64_t seed = kGlobalSeed;
 
-  float temperature = 1.f;
+  float temperature = 0.f;
   int32_t topK = 0;
   float topP = 1.f;
   float minP = 0.f;
 
-  static SamplingParams greedy() {
-    SamplingParams p;
-    p.temperature = 0.f;
-    return p;
+  SamplingParams() = default;
+
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  SamplingParams(float t, int32_t k = 0, float tp = 1.f, float mp = 0.f, int64_t s = kGlobalSeed)
+      : seed(s), temperature(t), topK(k), topP(tp), minP(mp) {}
+
+  static SamplingParams greedy() { return SamplingParams{}; }
+
+  void normalize() {
+    if (topK < 0) topK = 0;
+    if (topP >= 1.f || topP <= 0.f) topP = 1.f;
+    if (minP < 0.f) minP = 0.f;
   }
 
   friend bool operator==(const SamplingParams& a, const SamplingParams& b) {
@@ -38,13 +46,13 @@ struct SamplingParams {
 };
 
 inline bool isGreedy(const SamplingParams& p) {
-  const bool useTemp = p.temperature > 0.f && p.temperature != 1.f;
-  const bool useTopK = p.topK > 0;
-  const bool useTopP = p.topP < 1.f && p.topP > 0.f;
-  const bool useMinP = p.minP > 0.f;
   if (p.temperature <= 0.f) {
     return true;
   }
+  const bool useTemp = p.temperature != 1.f;
+  const bool useTopK = p.topK > 0;
+  const bool useTopP = p.topP < 1.f && p.topP > 0.f;
+  const bool useMinP = p.minP > 0.f;
   return !(useTemp || useTopK || useTopP || useMinP);
 }
 
@@ -55,9 +63,6 @@ tinytorch::Tensor fusedSample(const tinytorch::Tensor& logits, const SamplingPar
 tinytorch::Tensor fusedSample(const tinytorch::Tensor& logits, const SamplingParams& params, uint64_t globalSeed,
                               uint64_t globalSeq);
 
-// Graph-capturable variant: reads globalSeq from a device pointer so that the
-// value can be updated between CUDA Graph replays without re-capturing.
-// output: pre-allocated [batch, 1] Int64 tensor (addresses baked into graph)
 void fusedSampleGraphable(const tinytorch::Tensor& logits, tinytorch::Tensor& output, const SamplingParams& params,
                           uint64_t globalSeed, const uint64_t* devGlobalSeqPtr);
 

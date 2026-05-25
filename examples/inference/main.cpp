@@ -24,6 +24,7 @@ static void printUsage(const char* progName) {
   LOGI("  --device <cpu|cuda>   Device type (default: cuda)");
   LOGI("  --dtype <fp32|fp16|bf16>  Data type (default: bf16)");
   LOGI("  --max-tokens <n>      Max new tokens (default: 32)");
+  LOGI("  --max-graph-batch <n> Max batch size for CUDA Graph capture (default: 64)");
   LOGI("  --temperature <f>     Sampling temperature (default: 0.8)");
   LOGI("  --top-p <f>           Top-p sampling (default: 0.9)");
   LOGI("  --input <text>        Input prompt (default: '%s')", DEFAULT_INPUT.c_str());
@@ -35,6 +36,7 @@ int main(int argc, char** argv) {
   std::string device = "cuda";
   std::string dtype = "bf16";
   int maxTokens = 32;
+  int maxGraphBatch = 64;
   float temperature = 0.8f;
   float topP = 0.9f;
   std::string input = DEFAULT_INPUT;
@@ -53,6 +55,8 @@ int main(int argc, char** argv) {
       dtype = argv[++i];
     } else if (arg == "--max-tokens" && i + 1 < argc) {
       maxTokens = static_cast<int>(std::strtol(argv[++i], nullptr, 10));
+    } else if (arg == "--max-graph-batch" && i + 1 < argc) {
+      maxGraphBatch = static_cast<int>(std::strtol(argv[++i], nullptr, 10));
     } else if (arg == "--temperature" && i + 1 < argc) {
       temperature = std::strtof(argv[++i], nullptr);
     } else if (arg == "--top-p" && i + 1 < argc) {
@@ -77,6 +81,7 @@ int main(int argc, char** argv) {
   config.samplerConfig.temperature = temperature;
   config.samplerConfig.topP = topP;
   config.maxNewTokens = maxTokens;
+  config.maxGraphBatch = maxGraphBatch;
 
   if (device == "cpu") {
     config.device = tinytorch::DeviceType::CPU;

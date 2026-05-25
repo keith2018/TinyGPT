@@ -105,14 +105,14 @@ TEST(sampler, temperature_only_distribution) {
 
   kernel::SamplingParams params;
   params.temperature = 1.f;
-  params.topK = 3;   // == vocab_size, mathematically equivalent to no filter
+  params.topK = 3;  // == vocab_size, mathematically equivalent to no filter
   params.topP = 1.f;
   params.minP = 0.f;
 
   constexpr int N = 4096;
   std::vector<int> hist(3, 0);
   for (int i = 0; i < N; ++i) {
-    const auto tok = sampleOnceDirect(logits, params, /*seed=*/static_cast<uint64_t>(i * 7 + 31), /*seq=*/static_cast<uint64_t>(i));
+    const auto tok = sampleOnceDirect(logits, params, /*seed=*/(i * 7 + 31), /*seq=*/static_cast<uint64_t>(i));
     ASSERT_GE(tok, 0);
     ASSERT_LT(tok, 3);
     hist[tok]++;
@@ -140,7 +140,7 @@ TEST(sampler, high_temperature_flattens_distribution) {
   constexpr int N = 6000;
   std::vector<int> hist(3, 0);
   for (int i = 0; i < N; ++i) {
-    const auto tok = sampleOnceDirect(logits, params, /*seed=*/static_cast<uint64_t>(i * 13 + 5), /*seq=*/static_cast<uint64_t>(i));
+    const auto tok = sampleOnceDirect(logits, params, /*seed=*/(i * 13 + 5), /*seq=*/static_cast<uint64_t>(i));
     hist[tok]++;
   }
 
@@ -401,7 +401,7 @@ TEST(sampler, high_level_greedy) {
   auto logits = makeLogits({0.1f, 5.0f, 2.3f, -1.0f, 3.7f});
   SamplerConfig cfg;  // default: temperature=0 => greedy
   Sampler sampler(cfg);
-  EXPECT_FALSE(sampler.doSample());
+  EXPECT_TRUE(sampler.isGreedy());
 
   auto out = tt::function::argmax(logits, -1, true);
   EXPECT_EQ(readTokens(out).front(), 1);
@@ -420,7 +420,7 @@ TEST(sampler, high_level_sampling_routes_to_fused_kernel) {
   cfg.seed = 42;
 
   Sampler sampler(cfg);
-  EXPECT_TRUE(sampler.doSample());
+  EXPECT_FALSE(sampler.isGreedy());
 
   // top-k=3 on this distribution allows {1, 4, 2} — assert we never escape.
   std::unordered_set<int64_t> seen;
@@ -440,13 +440,13 @@ TEST(sampler, high_level_config_temperature_zero_is_greedy) {
   SKIP_IF_NO_CUDA();
 
   // HuggingFace convention: temperature <= 0 means greedy regardless of
-  // other knobs. Sampler::doSample() must reflect this.
+  // other knobs. Sampler::isGreedy() must reflect this.
   SamplerConfig cfg;
   cfg.temperature = 0.f;
   cfg.topK = 50;
   cfg.topP = 0.9f;
   Sampler sampler(cfg);
-  EXPECT_FALSE(sampler.doSample());
+  EXPECT_TRUE(sampler.isGreedy());
 }
 
 // -----------------------------------------------------------------------------
@@ -585,7 +585,7 @@ TEST(sampler, identical_logits_uniform) {
   constexpr int N = 5000;
   std::vector<int> hist(5, 0);
   for (int i = 0; i < N; ++i) {
-    const auto tok = sampleOnceDirect(logits, params, /*seed=*/static_cast<uint64_t>(i * 11 + 3), /*seq=*/static_cast<uint64_t>(i));
+    const auto tok = sampleOnceDirect(logits, params, /*seed=*/(i * 11 + 3), /*seq=*/static_cast<uint64_t>(i));
     ASSERT_GE(tok, 0);
     ASSERT_LT(tok, 5);
     hist[tok]++;
@@ -617,7 +617,7 @@ TEST(sampler, negative_temperature_is_greedy) {
 // 17. kernel::isGreedy() unit test — exercises all parameter combinations
 // -----------------------------------------------------------------------------
 TEST(sampler, isGreedy_function) {
-  // Default: temperature=1, no knobs -> greedy.
+  // Default-constructed: temperature=0 -> greedy.
   {
     kernel::SamplingParams p;
     EXPECT_TRUE(kernel::isGreedy(p));
@@ -684,34 +684,34 @@ TEST(sampler, isGreedy_function) {
 }
 
 // -----------------------------------------------------------------------------
-// 18. toKernelParams() conversion test
+// 18. SamplingParams::normalize() test
 // -----------------------------------------------------------------------------
-TEST(sampler, toKernelParams_conversion) {
-  // Normal case: all fields set.
+TEST(sampler, normalize_params) {
+  // Normal case: all fields valid, normalize is a no-op.
   {
     SamplerConfig cfg(0.7f, 50, 0.9f, 0.05f, 12345);
-    auto p = toKernelParams(cfg);
-    EXPECT_FLOAT_EQ(p.temperature, 0.7f);
-    EXPECT_EQ(p.topK, 50);
-    EXPECT_FLOAT_EQ(p.topP, 0.9f);
-    EXPECT_FLOAT_EQ(p.minP, 0.05f);
-    EXPECT_EQ(p.seed, 12345);
+    cfg.normalize();
+    EXPECT_FLOAT_EQ(cfg.temperature, 0.7f);
+    EXPECT_EQ(cfg.topK, 50);
+    EXPECT_FLOAT_EQ(cfg.topP, 0.9f);
+    EXPECT_FLOAT_EQ(cfg.minP, 0.05f);
+    EXPECT_EQ(cfg.seed, 12345);
   }
   // Disabled knobs are normalized to their canonical disabled values.
   {
     SamplerConfig cfg(0.f, -1, 1.5f, -0.1f, -1);
-    auto p = toKernelParams(cfg);
-    EXPECT_FLOAT_EQ(p.temperature, 0.f);  // passed through
-    EXPECT_EQ(p.topK, 0);                 // -1 -> 0
-    EXPECT_FLOAT_EQ(p.topP, 1.f);         // 1.5 -> 1.0
-    EXPECT_FLOAT_EQ(p.minP, 0.f);         // -0.1 -> 0.0
-    EXPECT_EQ(p.seed, -1);                // passed through
+    cfg.normalize();
+    EXPECT_FLOAT_EQ(cfg.temperature, 0.f);  // passed through
+    EXPECT_EQ(cfg.topK, 0);                 // -1 -> 0
+    EXPECT_FLOAT_EQ(cfg.topP, 1.f);         // 1.5 -> 1.0
+    EXPECT_FLOAT_EQ(cfg.minP, 0.f);         // -0.1 -> 0.0
+    EXPECT_EQ(cfg.seed, -1);                // passed through
   }
   // topP boundary: exactly 0 is "disabled" (the >0 check filters it).
   {
     SamplerConfig cfg(1.f, 0, 0.f, 0.f, -1);
-    auto p = toKernelParams(cfg);
-    EXPECT_FLOAT_EQ(p.topP, 1.f);  // 0.0 -> disabled
+    cfg.normalize();
+    EXPECT_FLOAT_EQ(cfg.topP, 1.f);  // 0.0 -> disabled
   }
 }
 

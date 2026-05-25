@@ -29,7 +29,7 @@ struct ForwardContext {
   float* tmpO = nullptr;
   float* tmpLse = nullptr;
 
-  // [batchSize] int64 — indices of last token per sequence for selective lm_head
+  // [batchSize] int64 — indices of last token per sequence
   tinytorch::Tensor lastTokenIndices;
 
   static ForwardContext* current();

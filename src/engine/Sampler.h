@@ -6,38 +6,54 @@
 
 #pragma once
 
+#include <functional>
+#include <memory>
+#include <vector>
+
 #include "kernel/SamplerOps.h"
+
+namespace tinytorch::cuda {
+struct CUDAStream;
+}
 
 namespace tinygpt {
 
-struct SamplerConfig {
-  float temperature = 0.f;
-  int32_t topK = 0;
-  float topP = 1.f;
-  float minP = 0.f;
-
-  int64_t seed = -1;
-
-  // NOLINTNEXTLINE(google-explicit-constructor)
-  SamplerConfig(float t = 0.f, int32_t k = 0, float tp = 1.f, float mp = 0.f, int64_t s = -1)
-      : temperature(t), topK(k), topP(tp), minP(mp), seed(s) {}
-};
-
-kernel::SamplingParams toKernelParams(const SamplerConfig& cfg);
+using SamplerConfig = kernel::SamplingParams;
+using GraphSampleStage = std::function<void(const tinytorch::Tensor& logits, tinytorch::cuda::CUDAStream& stream)>;
 
 class Sampler {
  public:
-  explicit Sampler(const SamplerConfig& config);
-  ~Sampler() = default;
+  explicit Sampler(SamplerConfig params) : params_(params) { params_.normalize(); }
 
-  const SamplerConfig& config() const { return config_; }
-  const kernel::SamplingParams& params() const { return params_; }
-  bool doSample() const { return doSample_; }
+  const SamplerConfig& params() const { return params_; }
+  bool isGreedy() const { return kernel::isGreedy(params_); }
 
  private:
-  SamplerConfig config_;
-  kernel::SamplingParams params_;
-  bool doSample_;
+  SamplerConfig params_;
+};
+
+class BatchSampler {
+ public:
+  BatchSampler(tinytorch::Device device, int32_t maxBatchTokens);
+  ~BatchSampler();
+
+  BatchSampler(const BatchSampler&) = delete;
+  BatchSampler& operator=(const BatchSampler&) = delete;
+
+  static bool allGreedy(const std::vector<Sampler*>& samplers);
+
+  void sampleEager(const tinytorch::Tensor& logits, const std::vector<Sampler*>& samplers, bool allGreedy,
+                   tinytorch::cuda::CUDAStream& stream);
+
+  void recordTokensReady(tinytorch::cuda::CUDAStream& stream);
+
+  const int64_t* consumeTokens();
+
+  GraphSampleStage makeGreedyStage(int32_t batchSize);
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace tinygpt

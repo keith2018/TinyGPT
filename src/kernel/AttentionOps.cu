@@ -36,8 +36,6 @@ static tinytorch::Tensor flashAttentionPagedVarLenImpl(
 
   float* tmpOPtr = nullptr;
   float* tmpLsePtr = nullptr;
-  tinytorch::Tensor tmpO;
-  tinytorch::Tensor tmpLse;
 
   if (numPartitions > 1) {
     if (externalTmpO != nullptr && externalTmpLse != nullptr) {
@@ -47,8 +45,8 @@ static tinytorch::Tensor flashAttentionPagedVarLenImpl(
       const auto tmpOSize = static_cast<int64_t>(tfa::splitKvTmpOSize(totalQ, numHeadsQ, numPartitions, headDim));
       const auto tmpLseSize = static_cast<int64_t>(tfa::splitKvTmpLseSize(totalQ, numHeadsQ, numPartitions));
       const auto floatOpts = query.options().noGrad().dtype(tinytorch::DType::Float32);
-      tmpO = tinytorch::Tensor({tmpOSize}, floatOpts);
-      tmpLse = tinytorch::Tensor({tmpLseSize}, floatOpts);
+      auto tmpO = tinytorch::Tensor({tmpOSize}, floatOpts);
+      auto tmpLse = tinytorch::Tensor({tmpLseSize}, floatOpts);
       tmpOPtr = tmpO.dataPtr<float>();
       tmpLsePtr = tmpLse.dataPtr<float>();
     }
@@ -130,27 +128,11 @@ void scatterKVToCache(const tinytorch::Tensor& key, const tinytorch::Tensor& val
       key, { scatterKVToCacheImpl<CudaT>(key, value, keyCache, valueCache, slotMapping, blockSize); });
 }
 
-// =============================================================================
-// Fused RoPE(K) + ScatterKVToCache kernel
-//
-// Combines rotary position embedding on K with scattered write of K,V to the
-// paged KV cache.  Eliminates the intermediate rotated-K tensor and one kernel
-// launch per layer per decode step.
-//
-// For each token:
-//   1. Read K from dense input, apply RoPE rotation, write to keyCache
-//   2. Read V from dense input, write to valueCache (no rotation)
-// =============================================================================
-
 template <typename scalar_t>
-__global__ void kRopeScatterKV(const scalar_t* __restrict__ key,       // [numTokens, numKvHeads, headDim]
-                               const scalar_t* __restrict__ value,     // [numTokens, numKvHeads, headDim]
-                               scalar_t* __restrict__ keyCache,        // paged pool
-                               scalar_t* __restrict__ valueCache,      // paged pool
-                               const int* __restrict__ slotMapping,    // [numTokens]
-                               const float* __restrict__ ropeCache,    // [maxPos, headDim, 2]
-                               const int64_t* __restrict__ positions,  // [numTokens]
-                               int numKvHeads, int headDim, int blockSize) {
+__global__ void kRopeScatterKV(const scalar_t* __restrict__ key, const scalar_t* __restrict__ value,
+                               scalar_t* __restrict__ keyCache, scalar_t* __restrict__ valueCache,
+                               const int* __restrict__ slotMapping, const float* __restrict__ ropeCache,
+                               const int64_t* __restrict__ positions, int numKvHeads, int headDim, int blockSize) {
   const unsigned int tokenIdx = blockIdx.x;
   const int slot = slotMapping[tokenIdx];
   if (slot < 0) return;  // padding token
@@ -168,15 +150,15 @@ __global__ void kRopeScatterKV(const scalar_t* __restrict__ key,       // [numTo
     const int dstOffset = blockId * numKvHeads * blockSize * headDim + h * blockSize * headDim + blockOffset * headDim;
 
     for (unsigned int d = threadIdx.x; d < static_cast<unsigned>(halfDim); d += blockDim.x) {
-      // --- K: apply RoPE rotation and scatter ---
-      const float k1 = static_cast<float>(key[srcOffset + d]);
-      const float k2 = static_cast<float>(key[srcOffset + halfDim + d]);
-      const float cos_val = ropeRow[d * 2];
-      const float sin_val = ropeRow[d * 2 + 1];
+      // K: apply RoPE rotation and scatter
+      const auto k1 = static_cast<float>(key[srcOffset + d]);
+      const auto k2 = static_cast<float>(key[srcOffset + halfDim + d]);
+      const auto cos_val = ropeRow[d * 2];
+      const auto sin_val = ropeRow[d * 2 + 1];
       keyCache[dstOffset + d] = static_cast<scalar_t>(k1 * cos_val - k2 * sin_val);
       keyCache[dstOffset + halfDim + d] = static_cast<scalar_t>(k2 * cos_val + k1 * sin_val);
 
-      // --- V: pass-through scatter (no rotation) ---
+      // V: pass-through scatter (no rotation)
       valueCache[dstOffset + d] = value[srcOffset + d];
       valueCache[dstOffset + halfDim + d] = value[srcOffset + halfDim + d];
     }
@@ -215,67 +197,49 @@ void ropeScatterKVToCache(const tinytorch::Tensor& key, const tinytorch::Tensor&
   });
 }
 
-// =============================================================================
-// Fused K-Norm + RoPE(K) + ScatterKVToCache kernel
-//
-// Combines RMSNorm on K + rotary embedding + scattered write to paged cache
-// in a single kernel.  This eliminates the separate kNormSmall kernel for K.
-//
-// RMSNorm: out[i] = (input[i] / sqrt(mean(input^2) + eps)) * weight[i]
-//
-// The kernel processes one head per thread block warp-group to allow the
-// block-level reduction needed for RMSNorm (computing sum of squares).
-// =============================================================================
-
 template <typename scalar_t>
-__global__ void kNormRopeScatterKV(const scalar_t* __restrict__ key,         // [numTokens, numKvHeads, headDim]
-                                   const scalar_t* __restrict__ value,       // [numTokens, numKvHeads, headDim]
-                                   scalar_t* __restrict__ keyCache,          // paged pool
-                                   scalar_t* __restrict__ valueCache,        // paged pool
-                                   const int* __restrict__ slotMapping,      // [numTokens]
-                                   const float* __restrict__ ropeCache,      // [maxPos, headDim, 2]
-                                   const int64_t* __restrict__ positions,    // [numTokens]
-                                   const scalar_t* __restrict__ normWeight,  // [headDim]
+__global__ void kNormRopeScatterKV(const scalar_t* __restrict__ key, const scalar_t* __restrict__ value,
+                                   scalar_t* __restrict__ keyCache, scalar_t* __restrict__ valueCache,
+                                   const int* __restrict__ slotMapping, const float* __restrict__ ropeCache,
+                                   const int64_t* __restrict__ positions, const scalar_t* __restrict__ normWeight,
                                    float eps, int numKvHeads, int headDim, int blockSize) {
-  // Grid: (numTokens, numKvHeads), Block: (128 threads)
-  // Each block handles one (token, head) pair for K, and the same for V pass-through.
-  const int tokenIdx = blockIdx.x;
-  const int headIdx = blockIdx.y;
-  const int tid = threadIdx.x;
-  const int halfDim = headDim >> 1;
+  const unsigned int tokenIdx = blockIdx.x;
+  const unsigned int headIdx = blockIdx.y;
+  const unsigned int tid = threadIdx.x;
+  const unsigned int halfDim = headDim >> 1;
 
   const int slot = slotMapping[tokenIdx];
-  if (slot < 0) return;
+  if (slot < 0) {
+    return;
+  }
 
   const int blockId = slot / blockSize;
   const int blockOffset = slot % blockSize;
 
   const unsigned int srcOffset = tokenIdx * numKvHeads * headDim + headIdx * headDim;
-  const int dstOffset =
+  const unsigned int dstOffset =
       blockId * numKvHeads * blockSize * headDim + headIdx * blockSize * headDim + blockOffset * headDim;
 
-  // --- Phase 1: RMSNorm on K head ---
-  // Compute sum of squares for this head
+  // RMSNorm on K head
   float sumSq = 0.f;
-  for (int d = tid; d < headDim; d += blockDim.x) {
-    float val = static_cast<float>(key[srcOffset + d]);
+  for (unsigned int d = tid; d < headDim; d += blockDim.x) {
+    auto val = static_cast<float>(key[srcOffset + d]);
     sumSq += val * val;
   }
 
-  // Block-level reduction for sum of squares
-  // Use warp shuffle + shared memory reduction
-  __shared__ float sPartial[32];  // one per warp (up to 4 warps for 128 threads)
-  const int warpId = tid / 32;
-  const int laneId = tid % 32;
+  // block-level reduction for sum of squares
+  __shared__ float sPartial[32];
+  const unsigned int warpId = tid / 32;
+  const unsigned int laneId = tid % 32;
 
-  // Warp-level reduction
+  // warp-level reduction
   for (int offset = 16; offset > 0; offset >>= 1) {
     sumSq += __shfl_down_sync(0xffffffff, sumSq, offset);
   }
   if (laneId == 0) sPartial[warpId] = sumSq;
   __syncthreads();
 
-  // First warp reduces across warps
+  // warp reduces across warps
   if (warpId == 0) {
     float val = (laneId < (blockDim.x / 32)) ? sPartial[laneId] : 0.f;
     for (int offset = 16; offset > 0; offset >>= 1) {
@@ -287,24 +251,24 @@ __global__ void kNormRopeScatterKV(const scalar_t* __restrict__ key,         // 
 
   const float invRms = rsqrtf(sPartial[0] / static_cast<float>(headDim) + eps);
 
-  // --- Phase 2: Normalize K + Apply RoPE + Scatter to cache ---
+  // normalize K + Apply RoPE + Scatter to cache
   const int64_t pos = positions[tokenIdx];
   const float* ropeRow = ropeCache + pos * headDim * 2;
 
-  for (int d = tid; d < halfDim; d += blockDim.x) {
+  for (unsigned int d = tid; d < halfDim; d += blockDim.x) {
     // RMSNorm: normalize and apply weight
-    float k1_raw = static_cast<float>(key[srcOffset + d]);
-    float k2_raw = static_cast<float>(key[srcOffset + halfDim + d]);
-    float w1 = static_cast<float>(normWeight[d]);
-    float w2 = static_cast<float>(normWeight[halfDim + d]);
-    float k1 = k1_raw * invRms * w1;
-    float k2 = k2_raw * invRms * w2;
+    const auto k1Raw = static_cast<float>(key[srcOffset + d]);
+    const auto k2Raw = static_cast<float>(key[srcOffset + halfDim + d]);
+    const auto w1 = static_cast<float>(normWeight[d]);
+    const auto w2 = static_cast<float>(normWeight[halfDim + d]);
+    const auto k1 = k1Raw * invRms * w1;
+    const auto k2 = k2Raw * invRms * w2;
 
     // RoPE rotation
-    float cos_val = ropeRow[d * 2];
-    float sin_val = ropeRow[d * 2 + 1];
-    keyCache[dstOffset + d] = static_cast<scalar_t>(k1 * cos_val - k2 * sin_val);
-    keyCache[dstOffset + halfDim + d] = static_cast<scalar_t>(k2 * cos_val + k1 * sin_val);
+    const auto cosVal = ropeRow[d * 2];
+    const auto sinVal = ropeRow[d * 2 + 1];
+    keyCache[dstOffset + d] = static_cast<scalar_t>(k1 * cosVal - k2 * sinVal);
+    keyCache[dstOffset + halfDim + d] = static_cast<scalar_t>(k2 * cosVal + k1 * sinVal);
 
     // V pass-through scatter
     valueCache[dstOffset + d] = value[srcOffset + d];
