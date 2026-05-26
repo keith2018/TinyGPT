@@ -4,7 +4,6 @@ Tiny C++ LLM inference implementation from scratch.
 
 ## Supported Models
 
-- GPT-2
 - Llama 3.2
 - Qwen 2.5
 - Qwen 3
@@ -13,9 +12,9 @@ Tiny C++ LLM inference implementation from scratch.
 ## Features
 
 - Fast BPE tokenizer, inspired by [tiktoken](https://github.com/openai/tiktoken)
-- CPU / CUDA inference
-- FP32 / FP16 / BF16 inference
-- KV Cache
+- CUDA inference with FP32 / FP16 / BF16 data types
+- Paged KV Cache with auto-sizing
+- Continuous Batching with chunked prefill
 - Flash Attention via [TinyFA](https://github.com/keith2018/TinyFA)
 
 ### Tokenizer Benchmark
@@ -29,9 +28,9 @@ an Intel(R) Xeon(R) Platinum 8255C CPU @ 2.50GHz.
 
 ## TODO
 
+- [x] Paged Attention
+- [x] Continuous Batching
 - [ ] Distributed Inference
-- [ ] Paged Attention
-- [ ] Continuous Batching
 
 ## Getting Started
 
@@ -47,7 +46,6 @@ cd TinyGPT
 Download model files from HuggingFace:
 
 ```bash
-git clone https://huggingface.co/openai-community/gpt2
 git clone https://huggingface.co/meta-llama/Llama-3.2-1B
 git clone https://huggingface.co/meta-llama/Llama-3.2-3B
 git clone https://huggingface.co/Qwen/Qwen2.5-0.5B
@@ -88,14 +86,16 @@ cd examples/inference/bin
 
 Available options:
 
-| Option                       | Default    | Description                         |
-|------------------------------|------------|-------------------------------------|
-| `--model <path>`             | (required) | Path to HuggingFace model directory |
-| `--device <cpu\|cuda>`       | `cuda`     | Device type                         |
-| `--dtype <fp32\|fp16\|bf16>` | `bf16`     | Data type                           |
-| `--max-tokens <n>`           | `32`       | Max new tokens to generate          |
-| `--temperature <f>`          | `0.8`      | Sampling temperature                |
-| `--top-p <f>`                | `0.9`      | Top-p (nucleus) sampling            |
+| Option                       | Default          | Description                         |
+|------------------------------|------------------|-------------------------------------|
+| `--model <path>`             | (required)       | Path to HuggingFace model directory |
+| `--device <cpu\|cuda>`       | `cuda`           | Device type                         |
+| `--dtype <fp32\|fp16\|bf16>` | `bf16`           | Data type                           |
+| `--max-tokens <n>`           | `32`             | Max new tokens to generate          |
+| `--temperature <f>`          | `0.8`            | Sampling temperature                |
+| `--top-p <f>`                | `0.9`            | Top-p (nucleus) sampling            |
+| `--input <text>`             | `The future of AI is` | Input prompt text              |
+| `--max-graph-batch <n>`      | `64`             | Max batch size for CUDA Graph capture |
 
 
 ## Server
@@ -111,17 +111,20 @@ cd server/bin
 
 Available options:
 
-| Option                | Default    | Description                                       |
-|-----------------------|------------|---------------------------------------------------|
-| `--model <path>`      | (required) | Path to HuggingFace model directory               |
-| `--host <addr>`       | `0.0.0.0`  | Server host address                               |
-| `--port <port>`       | `8080`     | Server port                                       |
-| `--max-tokens <n>`    | `4096`     | Max new tokens per request                        |
-| `--temperature <f>`   | `0.7`      | Sampling temperature                              |
-| `--top-p <f>`         | `0.9`      | Top-p sampling                                    |
-| `--min-p <f>`         | `0.0`      | Min-p sampling                                    |
-| `--chat-template <s>` | auto       | Custom chat template (Jinja2 string or file path) |
-| `--web-dir <path>`    | auto       | Path to web UI directory                          |
+| Option                  | Default    | Description                                       |
+|-------------------------|------------|---------------------------------------------------|
+| `--model <path>`        | (required) | Path to HuggingFace model directory               |
+| `--host <addr>`         | `0.0.0.0`  | Server host address                               |
+| `--port <port>`         | `8080`     | Server port                                       |
+| `--max-tokens <n>`      | `4096`     | Max new tokens per request                        |
+| `--temperature <f>`     | `0.7`      | Sampling temperature                              |
+| `--top-p <f>`           | `0.9`      | Top-p sampling                                    |
+| `--min-p <f>`           | `0.0`      | Min-p sampling                                    |
+| `--chat-template <s>`   | auto       | Custom chat template (Jinja2 string or file path) |
+| `--web-dir <path>`      | auto       | Path to web UI directory                          |
+| `--max-batch-tokens <n>`| `8192`     | Max tokens per batch step                         |
+| `--prefill-chunk-size <n>`| `512`    | Max prefill tokens per step per sequence          |
+| `--max-graph-batch <n>` | `64`       | Max batch size for CUDA Graph capture             |
 
 ### API Endpoints
 
@@ -151,15 +154,16 @@ ids = enc.encode("This is a test")
 
 ## Dependencies
 
-| Library                                                                      | Purpose           |
-|------------------------------------------------------------------------------|-------------------|
-| [TinyTorch](https://github.com/keith2018/TinyTorch)                          | Tensor operations |
-| [TinyFA](https://github.com/keith2018/TinyFA)                                | Flash Attention   |
-| [RapidJSON](https://github.com/Tencent/rapidjson)                            | JSON parsing      |
-| [pcre2](https://github.com/PCRE2Project/pcre2)                               | Regex             |
-| [utf8proc](https://github.com/JuliaStrings/utf8proc)                         | Unicode           |
-| [ankerl::unordered_dense](https://github.com/martinus/unordered_dense)       | HashMap           |
-| [moodycamel::ConcurrentQueue](https://github.com/cameron314/concurrentqueue) | Concurrent queue  |
+| Library                                                                      | Purpose            |
+|------------------------------------------------------------------------------|--------------------|
+| [TinyTorch](https://github.com/keith2018/TinyTorch)                          | Tensor operations  |
+| [TinyFA](https://github.com/keith2018/TinyFA)                                | Flash Attention    |
+| [RapidJSON](https://github.com/Tencent/rapidjson)                            | JSON parsing       |
+| [pcre2](https://github.com/PCRE2Project/pcre2)                               | Regex              |
+| [utf8proc](https://github.com/JuliaStrings/utf8proc)                         | Unicode            |
+| [ankerl::unordered_dense](https://github.com/martinus/unordered_dense)       | HashMap            |
+| [moodycamel::ConcurrentQueue](https://github.com/cameron314/concurrentqueue) | Concurrent queue   |
+| [cpp-httplib](https://github.com/yhirose/cpp-httplib)                        | HTTP server        |
 
 ## License
 
