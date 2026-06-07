@@ -16,6 +16,7 @@ Tiny C++ LLM inference implementation from scratch.
 - Paged KV Cache with auto-sizing
 - Continuous Batching with chunked prefill
 - Flash Attention via [TinyFA](https://github.com/keith2018/TinyFA)
+- Multi-GPU Tensor Parallel inference via NCCL
 
 ### Tokenizer Benchmark
 
@@ -25,12 +26,6 @@ the [benches/tokenizer.py](https://github.com/keith2018/TinyGPT/blob/main/benche
 an Intel(R) Xeon(R) Platinum 8255C CPU @ 2.50GHz.
 
 ![Tokenizer Benchmark](docs/tokenizer_bench.png)
-
-## TODO
-
-- [x] Paged Attention
-- [x] Continuous Batching
-- [ ] Distributed Inference
 
 ## Getting Started
 
@@ -96,6 +91,8 @@ Available options:
 | `--top-p <f>`                | `0.9`            | Top-p (nucleus) sampling            |
 | `--input <text>`             | `The future of AI is` | Input prompt text              |
 | `--max-graph-batch <n>`      | `64`             | Max batch size for CUDA Graph capture |
+| `--tensor-parallel <n>`      | `1`              | Tensor parallel size (number of GPUs) |
+| `--tp-init <s>`              | `env://`         | TP init method (e.g. `tcp://host:port`) |
 
 
 ## Server
@@ -125,6 +122,8 @@ Available options:
 | `--max-batch-tokens <n>`| `8192`     | Max tokens per batch step                         |
 | `--prefill-chunk-size <n>`| `512`    | Max prefill tokens per step per sequence          |
 | `--max-graph-batch <n>` | `64`       | Max batch size for CUDA Graph capture             |
+| `--tensor-parallel <n>` | `1`        | Tensor parallel size (number of GPUs)             |
+| `--tp-init <s>`         | `env://`   | TP init method (e.g. `tcp://host:port`)           |
 
 ### API Endpoints
 
@@ -139,6 +138,40 @@ The server implements the following OpenAI-compatible endpoints:
 Once the server is running, open `http://localhost:8080` in your browser to access the built-in Web UI.
 
 ![Server Web UI](docs/server_web.png)
+
+## Multi-GPU Inference (Tensor Parallel)
+
+TinyGPT supports multi-GPU inference via Tensor Parallelism over NCCL. Each rank runs as a
+separate process and is pinned to one GPU (`cuda:RANK`). Both the inference example and the
+server support TP — pass `--tensor-parallel <N>` to enable it.
+
+By default the init method is `env://`, which reads the following environment variables on
+each process:
+
+- `RANK` — rank id of this process (`0 .. N-1`)
+- `WORLD_SIZE` — total number of ranks (must equal `--tensor-parallel`)
+- `MASTER_ADDR` — host of rank 0
+- `MASTER_PORT` — port on rank 0 used for rendezvous
+
+Alternatively, pass `--tp-init tcp://host:port` to use a TCP rendezvous instead of env vars.
+
+### Launch Example (single-node, 2 GPUs)
+
+Start one process per GPU. For the server, only rank 0 binds the HTTP port; other ranks run
+as workers driven by rank 0 via NCCL collectives.
+
+```bash
+# Rank 0 (also serves HTTP on :8080)
+RANK=0 WORLD_SIZE=2 MASTER_ADDR=127.0.0.1 MASTER_PORT=29500 \
+  ./TinyGPT_server --model /path/to/model --tensor-parallel 2
+
+# Rank 1 (worker)
+RANK=1 WORLD_SIZE=2 MASTER_ADDR=127.0.0.1 MASTER_PORT=29500 \
+  ./TinyGPT_server --model /path/to/model --tensor-parallel 2
+```
+
+The same pattern applies to `TinyGPT_example_inference`. Note that tensor parallel requires
+`--device cuda` and models without tied word embeddings.
 
 ## Python Binding
 
