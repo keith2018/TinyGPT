@@ -68,6 +68,7 @@ bool HttpServer::start(const ServerConfig& config) {
   gptConfig.maxBatchTokens = config_.maxBatchTokens;
   gptConfig.prefillChunkSize = config_.prefillChunkSize;
   gptConfig.maxGraphBatch = config_.maxGraphBatch;
+  gptConfig.tensorParallelSize = config_.tensorParallelSize;
 
   engine_ = std::make_unique<GPTEngine>(gptConfig);
   if (!engine_->prepare()) {

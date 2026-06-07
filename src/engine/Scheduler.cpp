@@ -14,6 +14,7 @@
 #include "Tensor/CachedAllocator.h"
 #include "Utils/CUDAUtils.h"
 #include "Utils/Logger.h"
+#include "distributed/Communicator.h"
 #include "kernel/AttentionOps.h"
 
 namespace tt = tinytorch;
@@ -38,10 +39,11 @@ Scheduler::Scheduler(GPTModel& model, PagedKVCache& cache, tokenizer::Tokenizer&
   const int32_t maxSeqLenKV = cache_.maxBlocksPerSeq() * cache_.blockSize();
   const int32_t numPartitions = std::min((maxSeqLenKV + kMinPartSize - 1) / kMinPartSize, kMaxPartitions);
 
+  const int64_t localHeads = model_.numHeads() / distributed::Communicator::tp().worldSize();
+
   auto floatOpts = tt::Options(device_, tt::DType::Float32).noGrad();
-  const int64_t splitOSize =
-      static_cast<int64_t>(maxBatchTokens_) * model_.numHeads() * numPartitions * model_.headDim();
-  const int64_t splitLseSize = static_cast<int64_t>(maxBatchTokens_) * model_.numHeads() * numPartitions * 2;
+  const int64_t splitOSize = static_cast<int64_t>(maxBatchTokens_) * localHeads * numPartitions * model_.headDim();
+  const int64_t splitLseSize = static_cast<int64_t>(maxBatchTokens_) * localHeads * numPartitions * 2;
   splitKvO_ = tt::Tensor({splitOSize}, floatOpts);
   splitKvLse_ = tt::Tensor({splitLseSize}, floatOpts);
 
@@ -69,7 +71,12 @@ Scheduler::Scheduler(GPTModel& model, PagedKVCache& cache, tokenizer::Tokenizer&
       static_cast<double>(splitOSize * 4) / (1024.0 * 1024.0),
       static_cast<double>(splitLseSize * 4) / (1024.0 * 1024.0), padKvBlockId_);
 
-  captureAllGraphs();
+  // skip cuda graph in tp mode
+  if (!distributed::Communicator::tp().enabled()) {
+    captureAllGraphs();
+  } else {
+    LOGI("Scheduler: tp enabled (worldSize=%d), CUDA Graph disabled", distributed::Communicator::tp().worldSize());
+  }
 }
 
 Scheduler::~Scheduler() { stop(); }
@@ -92,6 +99,27 @@ void Scheduler::allocateMetaBuffers() {
   metaDevI64_ = tt::Tensor({i64Total}, devI64);
   metaHostI32_ = tt::Tensor({i32Total}, pinnedI32);
   metaDevI32_ = tt::Tensor({i32Total}, devI32);
+
+  tpHeaderDev_ = tt::Tensor({kTPHeaderSize}, devI64);
+}
+
+void Scheduler::broadcastStepToWorkers(int64_t command, int64_t totalTokens, int64_t scheduledBatch, int64_t maxSeqLenQ,
+                                       int64_t maxSeqLenKV, int64_t i64Used, int64_t i32Used) {
+  // header on cpu, copy to device, broadcast device tensor
+  int64_t header[kTPHeaderSize] = {command, totalTokens, scheduledBatch, maxSeqLenQ, maxSeqLenKV, i64Used, i32Used, 0};
+  auto& stream = tt::cuda::getCurrentCUDAStream(device_.index);
+  tt::Storage::copyOnDevice(tpHeaderDev_.dataPtr<>(), device_, header, tt::Device::cpu(),
+                            kTPHeaderSize * static_cast<int64_t>(sizeof(int64_t)), &stream);
+
+  auto& comm = distributed::Communicator::tp();
+  comm.broadcast(tpHeaderDev_);
+  if (command == 0) return;
+
+  // broadcast only the populated prefix of metadata buffers
+  auto i64View = metaDevI64_.narrow(0, 0, i64Used);
+  auto i32View = metaDevI32_.narrow(0, 0, i32Used);
+  comm.broadcast(i64View);
+  comm.broadcast(i32View);
 }
 
 void Scheduler::captureAllGraphs() {
@@ -199,6 +227,12 @@ void Scheduler::stop() {
   if (worker_.joinable()) {
     worker_.join();
   }
+
+  // tell worker ranks to exit their forward loop
+  if (distributed::Communicator::tp().enabled()) {
+    broadcastStepToWorkers(/*command=*/0, 0, 0, 0, 0, 0, 0);
+  }
+
   std::lock_guard<std::mutex> lock(waitMutex_);
   while (!waiting_.empty()) {
     auto& s = waiting_.front();
@@ -412,9 +446,10 @@ void Scheduler::runStep(std::vector<std::shared_ptr<GenSession>>& active) {
   const bool allGreedy = BatchSampler::allGreedy(batchSamplers);
 
   // determine if CUDA graph path will be used (affects buffer layout).
+  const bool tpEnabled = distributed::Communicator::tp().enabled();
   const bool allDecode = (totalTokens == scheduledBatch);
   int32_t graphBatch = 0;
-  if (allDecode && scheduledBatch <= maxGraphBatch_ && padKvBlockId_ >= 0) {
+  if (!tpEnabled && allDecode && scheduledBatch <= maxGraphBatch_ && padKvBlockId_ >= 0) {
     for (int32_t bs : graphBatchSizes_) {
       if (bs >= scheduledBatch) {
         graphBatch = bs;
@@ -495,6 +530,11 @@ void Scheduler::runStep(std::vector<std::shared_ptr<GenSession>>& active) {
                             i64Used * static_cast<int64_t>(sizeof(int64_t)), &stream);
   tt::Storage::copyOnDevice(metaDevI32_.dataPtr<>(), device_, metaHostI32_.dataPtr<>(), tt::Device::cpu(),
                             i32Used * static_cast<int64_t>(sizeof(int32_t)), &stream);
+
+  // broadcast control header + metadata buffers to worker ranks
+  if (tpEnabled) {
+    broadcastStepToWorkers(/*command=*/1, totalTokens, scheduledBatch, maxSeqLenQ, maxSeqLenKV, i64Used, i32Used);
+  }
 
   // tensor views
   auto tokensTensor = metaDevI64_.narrow(0, offTokens, layoutTokens);

@@ -11,6 +11,8 @@
 
 #include "Utils/Logger.h"
 #include "Utils/MMapUtils.h"
+#include "distributed/Communicator.h"
+#include "distributed/WeightLoader.h"
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
@@ -183,13 +185,10 @@ bool SafeTensors::loadInternal(tt::nn::Module& module, const std::string& path, 
     }
     tt::TensorPtr tensor = iter->second;
 
-    // shape
-    tt::SizeVector shape;
-    for (auto& v : info["shape"].GetArray()) shape.pushBack(v.GetInt64());
-    if (shape != tensor->shape()) {
-      LOGE("shape not equal for tensor: %s", name.c_str());
-      success = false;
-      continue;
+    // shape from file (full, unsharded)
+    tt::SizeVector fileShape;
+    for (auto& v : info["shape"].GetArray()) {
+      fileShape.pushBack(v.GetInt64());
     }
 
     // dtype
@@ -200,19 +199,37 @@ bool SafeTensors::loadInternal(tt::nn::Module& module, const std::string& path, 
       continue;
     }
 
-    // data_offsets
-    uint64_t start = info["data_offsets"][0].GetUint64();
-    uint64_t end = info["data_offsets"][1].GetUint64();
-    uint64_t nbytes = end - start;
-    uint64_t tensorSize = static_cast<uint64_t>(tensor->numel()) * dtypeSize(tensor->dtype());
-    if (nbytes != tensorSize) {
+    uint64_t fileStart = info["data_offsets"][0].GetUint64();
+    uint64_t fileEnd = info["data_offsets"][1].GetUint64();
+    uint64_t fileBytes = fileEnd - fileStart;
+    const auto* baseDataPtr = static_cast<const char*>(fileMap) + sizeof(uint64_t) + headerSize + fileStart;
+    const size_t dtSize = dtypeSize(tensor->dtype());
+
+    // sharded path
+    const auto* shard = distributed::WeightLoader::lookup(*tensor);
+    const int worldSize = distributed::Communicator::tp().worldSize();
+    if (shard && worldSize > 1 && shard->mode != distributed::ShardMode::REPLICATE) {
+      const int rank = distributed::Communicator::tp().rank();
+      if (!loadSharded(*tensor, *shard, fileShape, baseDataPtr, fileBytes, dtSize, rank, worldSize, name)) {
+        success = false;
+      }
+      continue;
+    }
+
+    // replicated path
+    if (fileShape != tensor->shape()) {
+      LOGE("shape not equal for tensor: %s", name.c_str());
+      success = false;
+      continue;
+    }
+    uint64_t tensorSize = static_cast<uint64_t>(tensor->numel()) * dtSize;
+    if (fileBytes != tensorSize) {
       LOGE("size not equal for tensor: %s", name.c_str());
       success = false;
       continue;
     }
-    const void* dataPtr = static_cast<const char*>(fileMap) + sizeof(uint64_t) + headerSize + start;
-    tt::Storage::copyOnDevice(tensor->dataPtr<>(), tensor->device(), dataPtr, tt::Device::cpu(),
-                              static_cast<int64_t>(nbytes));
+    tt::Storage::copyOnDevice(tensor->dataPtr<>(), tensor->device(), baseDataPtr, tt::Device::cpu(),
+                              static_cast<int64_t>(fileBytes));
   }
 
   if (onlyKeys.empty()) {
@@ -226,6 +243,71 @@ bool SafeTensors::loadInternal(tt::nn::Module& module, const std::string& path, 
 
   tt::MMapUtils::unmapFile(mappingResult);
   return success;
+}
+
+bool SafeTensors::loadSharded(tt::Tensor& tensor, const distributed::ShardInfo& shard, const tt::SizeVector& fileShape,
+                              const void* baseDataPtr, uint64_t fileBytes, size_t dtSize, int rank, int worldSize,
+                              const std::string& name) {
+  using distributed::ShardMode;
+
+  if (shard.mode == ShardMode::COLUMN) {
+    // file shape [fullOut, ...], local shape [fullOut/ws, ...]; contiguous slice
+    const int64_t fullOut = shard.partSizes.empty() ? fileShape[0] : shard.partSizes[0];
+    if (fileShape[0] != fullOut || fullOut % worldSize != 0) {
+      LOGE("shard COLUMN size mismatch for %s: fullOut=%lld file[0]=%lld ws=%d", name.c_str(),
+           static_cast<long long>(fullOut), static_cast<long long>(fileShape[0]), worldSize);
+      return false;
+    }
+    const int64_t localOut = fullOut / worldSize;
+    int64_t innerCount = 1;
+    for (size_t i = 1; i < fileShape.size(); i++) {
+      innerCount *= fileShape[i];
+    }
+
+    const uint64_t shardBytes = static_cast<uint64_t>(localOut) * innerCount * dtSize;
+    if (shardBytes != static_cast<uint64_t>(tensor.numel()) * dtSize) {
+      LOGE("shard COLUMN local size mismatch for %s", name.c_str());
+      return false;
+    }
+    const auto* srcPtr = static_cast<const char*>(baseDataPtr) + rank * shardBytes;
+    tt::Storage::copyOnDevice(tensor.dataPtr<>(), tensor.device(), srcPtr, tt::Device::cpu(),
+                              static_cast<int64_t>(shardBytes));
+    return true;
+  }
+
+  if (shard.mode == ShardMode::ROW) {
+    // file shape [outFeatures, fullIn], local shape [outFeatures, fullIn/ws]; row-by-row copy
+    if (fileShape.size() != 2) {
+      LOGE("shard ROW expects 2-D weight, got %zu-D for %s", fileShape.size(), name.c_str());
+      return false;
+    }
+    const int64_t outFeatures = fileShape[0];
+    const int64_t fullIn = fileShape[1];
+    if (fullIn % worldSize != 0) {
+      LOGE("shard ROW fullIn=%lld not divisible by ws=%d for %s", static_cast<long long>(fullIn), worldSize,
+           name.c_str());
+      return false;
+    }
+    const int64_t localIn = fullIn / worldSize;
+    if (outFeatures != tensor.shape()[0] || localIn != tensor.shape()[1]) {
+      LOGE("shard ROW shape mismatch for %s", name.c_str());
+      return false;
+    }
+    const uint64_t rowBytesFile = static_cast<uint64_t>(fullIn) * dtSize;
+    const uint64_t rowBytesLocal = static_cast<uint64_t>(localIn) * dtSize;
+    const uint64_t srcRowOff = static_cast<uint64_t>(rank) * rowBytesLocal;
+    auto* dstBase = static_cast<char*>(tensor.dataPtr<>());
+    for (int64_t r = 0; r < outFeatures; r++) {
+      const auto* srcPtr = static_cast<const char*>(baseDataPtr) + r * rowBytesFile + srcRowOff;
+      tt::Storage::copyOnDevice(dstBase + r * rowBytesLocal, tensor.device(), srcPtr, tt::Device::cpu(),
+                                static_cast<int64_t>(rowBytesLocal));
+    }
+    UNUSED(fileBytes);
+    return true;
+  }
+
+  LOGE("unsupported shard mode for tensor: %s", name.c_str());
+  return false;
 }
 
 bool SafeTensors::loadMulti(tt::nn::Module& module, const std::string& indexPath, bool strict) {

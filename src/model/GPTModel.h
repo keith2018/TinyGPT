@@ -7,17 +7,19 @@
 #pragma once
 
 #include "Modules.h"
+#include "distributed/Communicator.h"
 #include "engine/ForwardContext.h"
 #include "engine/PagedKVCache.h"
 #include "kernel/EmbeddingOps.h"
 #include "kernel/GemvOps.h"
 #include "layer/DecoderLayer.h"
 #include "layer/GatedMLP.h"
+#include "layer/Linear.h"
 #include "util/SafeTensors.h"
 
 namespace tinytorch::nn {
 
-template <typename AttnType, typename MLPType>
+template <typename AttnType, typename MLPType, typename LMHeadT = LmHeadLinear>
 class CausalLM : public Module {
  public:
   using DecoderLayerType = DecoderLayer<AttnType, MLPType>;
@@ -29,7 +31,7 @@ class CausalLM : public Module {
         embedTokens_(Embedding(vocabSize, hiddenSize, options)),
         layers_(ModuleList()),
         norm_(RMSNorm({hiddenSize}, rmsNormEps, options)),
-        lmHead_(Linear(hiddenSize, vocabSize, false, options)) {
+        lmHead_(LMHeadT(hiddenSize, vocabSize, false, options)) {
     for (int64_t i = 0; i < numLayers; i++) {
       auto attn = attnFactory(i);
       auto mlp = mlpFactory(i);
@@ -40,6 +42,11 @@ class CausalLM : public Module {
     }
 
     if (tieWordEmbeddings) {
+      // tie not compatible with vocab parallel: lmHead_ is sharded but
+      // embedTokens_ is full, so storage shapes mismatch. fall back to
+      // single-gpu lm_head when tying is required, or use a non-tied model.
+      ASSERT(!tinygpt::distributed::Communicator::tp().enabled() &&
+             "tied word embeddings not supported under tensor parallel");
       lmHead_.weight() = embedTokens_.weight();
     }
 
@@ -77,10 +84,8 @@ class CausalLM : public Module {
       hiddenStates = function::indexSelect(hiddenStates, 0, ctx->lastTokenIndices);
     }
 
-    // lm_head: use GEMV kernel for M=1 decode
-    if (hiddenStates.size(0) == 1 && hiddenStates.device().isCuda()) {
-      return tinygpt::kernel::gemvLmHead(hiddenStates, lmHead_.weight());
-    }
+    // lm_head: gemv fast-path for M==1 is internal to the linear class;
+    // VocabParallelLinear additionally allGathers logits across ranks.
     return lmHead_(hiddenStates);
   }
 
@@ -89,7 +94,7 @@ class CausalLM : public Module {
   Embedding embedTokens_;
   ModuleList layers_;
   RMSNorm norm_;
-  Linear lmHead_;
+  LMHeadT lmHead_;
 };
 
 }  // namespace tinytorch::nn

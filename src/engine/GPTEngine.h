@@ -31,6 +31,7 @@ struct GPTConfig {
   int32_t maxBatchTokens = 8192;
   int32_t prefillChunkSize = 512;
   int32_t maxGraphBatch = 64;
+  int32_t tensorParallelSize = 1;
 };
 
 struct GPTOutput {
@@ -67,6 +68,10 @@ class GPTEngine {
     int32_t kvBlockSize = 0;
   };
   EngineStats stats() const;
+
+  GPTModel* model() const { return context_.model.get(); }
+  PagedKVCache* pagedCache() const { return pagedCache_.get(); }
+  int32_t maxBatchTokens() const { return config_.maxBatchTokens; }
 
  private:
   GPTConfig config_;

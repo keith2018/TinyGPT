@@ -14,7 +14,6 @@ find_package(CUDAToolkit REQUIRED)
 enable_language(CUDA)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-add_definitions(-DUSE_CUDA)
 
 if (${TINYGPT_BUILD_PYBINDING})
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -54,6 +53,7 @@ set(TFA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory(${THIRD_PARTY_DIR}/TinyFA TinyFA)
 
 file(GLOB TinyGPT_src
+        "${CMAKE_CURRENT_SOURCE_DIR}/distributed/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/engine/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/huggingface/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/model/*.cpp"

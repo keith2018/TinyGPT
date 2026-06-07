@@ -10,7 +10,12 @@
 #include <iostream>
 #include <string>
 
+#include "Distributed/BackendNCCL.h"
+#include "Distributed/DistributedProcessGroup.h"
 #include "HttpServer.h"
+#include "Utils/CUDAUtils.h"
+#include "distributed/Communicator.h"
+#include "distributed/WorkerRuntime.h"
 
 using namespace tinygpt;
 using namespace tinygpt::server;
@@ -39,6 +44,10 @@ static void printUsage(const char* progName) {
   LOGI("  --min-p <f>        Min-p sampling (default: 0.0)");
   LOGI("  --chat-template <s> Custom chat template (Jinja2 string or file path)");
   LOGI("  --web-dir <path>   Path to web UI directory (auto-detected if omitted)");
+  LOGI("  --tensor-parallel <n>  Tensor parallel size (default: 1)");
+  LOGI("                     Each rank is launched as a separate process via env://");
+  LOGI("                     (set RANK / WORLD_SIZE / MASTER_ADDR / MASTER_PORT)");
+  LOGI("  --tp-init <s>      Init method (default: env://; e.g. tcp://host:port)");
   LOGI("  --help             Show this help message");
 }
 
@@ -79,6 +88,10 @@ int main(int argc, char** argv) {
       config.samplerConfig.minP = std::strtof(argv[++i], nullptr);
     } else if (arg == "--web-dir" && i + 1 < argc) {
       config.webDir = argv[++i];
+    } else if (arg == "--tensor-parallel" && i + 1 < argc) {
+      parseInt(argv[++i], config.tensorParallelSize);
+    } else if (arg == "--tp-init" && i + 1 < argc) {
+      config.tpInitMethod = argv[++i];
     } else if (arg == "--chat-template" && i + 1 < argc) {
       std::string val = argv[++i];
       bool isFile = false;
@@ -115,21 +128,80 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  int tpRank = 0;
+  if (config.tensorParallelSize > 1) {
+    auto& dpg = tinytorch::distributed::DistributedProcessGroup::getInstance();
+    if (!dpg->initProcessGroup(tinytorch::distributed::NCCL, config.tpInitMethod, -1, config.tensorParallelSize)) {
+      LOGE("Failed to init process group");
+      return 1;
+    }
+    auto pg = dpg->getProcessGroup();
+    // enable single-stream nccl so collectives run in-order on the compute stream
+    auto backend =
+        std::dynamic_pointer_cast<tinytorch::distributed::BackendNCCL>(pg->getBackend(tinytorch::distributed::NCCL));
+    if (backend) backend->setUseComputeStream(true);
+
+    tinygpt::distributed::Communicator::tp().init(pg);
+    tpRank = pg->getRank();
+
+    config.device = tinytorch::Device(tinytorch::DeviceType::CUDA, static_cast<tinytorch::DeviceIndex>(tpRank));
+    tinytorch::cuda::setDevice(tpRank);
+    LOGI("TP rank=%d worldSize=%d device=cuda:%d", tpRank, config.tensorParallelSize, tpRank);
+  }
+
   // register signal handlers
   std::signal(SIGINT, signalHandler);
   std::signal(SIGTERM, signalHandler);
 
-  HttpServer server;
-  g_server = &server;
+  auto teardownTP = [&]() {
+    if (config.tensorParallelSize > 1) {
+      tinygpt::distributed::Communicator::tp().reset();
+      tinytorch::distributed::DistributedProcessGroup::getInstance()->destroyProcessGroup();
+    }
+  };
 
-  LOGI("============================================================");
-  LOGI("  TinyGPT OpenAI-Compatible API Server");
-  LOGI("============================================================");
+  if (tpRank != 0) {
+    {
+      GPTConfig gptCfg;
+      gptCfg.modelDir = config.modelDir;
+      gptCfg.device = config.device;
+      gptCfg.dtype = config.dtype;
+      gptCfg.samplerConfig = config.samplerConfig;
+      gptCfg.maxNewTokens = config.maxNewTokens;
+      gptCfg.maxBatchTokens = config.maxBatchTokens;
+      gptCfg.prefillChunkSize = config.prefillChunkSize;
+      gptCfg.maxGraphBatch = config.maxGraphBatch;
+      gptCfg.tensorParallelSize = config.tensorParallelSize;
 
-  if (!server.start(config)) {
-    LOGE("Failed to start server");
-    return 1;
+      GPTEngine engine(gptCfg);
+      if (!engine.prepare()) {
+        LOGE("Worker rank=%d: prepare failed", tpRank);
+        teardownTP();
+        return 1;
+      }
+      tinygpt::distributed::WorkerRuntime worker(*engine.model(), *engine.pagedCache(), engine.maxBatchTokens());
+      worker.run();
+    }
+    teardownTP();
+    return 0;
   }
 
-  return 0;
+  int rc = 0;
+  {
+    HttpServer server;
+    g_server = &server;
+
+    LOGI("============================================================");
+    LOGI("  TinyGPT OpenAI-Compatible API Server");
+    LOGI("============================================================");
+
+    if (!server.start(config)) {
+      LOGE("Failed to start server");
+      rc = 1;
+    }
+    g_server = nullptr;
+  }
+
+  teardownTP();
+  return rc;
 }

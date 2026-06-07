@@ -24,12 +24,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 target_link_libraries(${PROJECT_NAME} TinyGPT_lib gtest_main)
 
-# CUDA support
-find_package(CUDAToolkit QUIET)
-if (CUDAToolkit_FOUND)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE USE_CUDA)
-endif ()
-
 if (MSVC)
     set_source_files_properties(${test_src} PROPERTIES COMPILE_FLAGS "/utf-8")
 endif ()
