@@ -164,7 +164,9 @@ tinytorch::Tensor gemvLinear(const tinytorch::Tensor& input, const tinytorch::Te
   ASSERT(K % 8 == 0);
 
   const auto N = weight.size(0);
-  ASSERT(N >= getGemvLinearMinN(input.device().index));
+  if (N < getGemvLinearMinN(input.device().index)) {
+    return {};
+  }
 
   tinytorch::Tensor output;
   TINYGPT_DISPATCH_FLOAT_DTYPE(input, { output = gemvLmHeadImpl<CudaT>(input, weight); });

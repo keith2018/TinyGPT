@@ -66,6 +66,16 @@ class Scheduler {
   size_t numWaiting() const;
   size_t numRunning() const { return runningCount_.load(); }
 
+  // [0] command (0=stop, 1=run)
+  // [1] totalTokens
+  // [2] scheduledBatch
+  // [3] maxSeqLenQ
+  // [4] maxSeqLenKV
+  // [5] i64Used
+  // [6] i32Used
+  // [7] reserved
+  static constexpr int32_t kTPHeaderSize = 8;
+
  private:
   // per-request state
   struct GenSession {
@@ -99,6 +109,9 @@ class Scheduler {
 
   void allocateMetaBuffers();
 
+  void broadcastStepToWorkers(int64_t command, int64_t totalTokens, int64_t scheduledBatch, int64_t maxSeqLenQ,
+                              int64_t maxSeqLenKV, int64_t i64Used, int64_t i32Used);
+
   void padMetadataForGraph(int32_t realBatch, int32_t graphBatch, int32_t realTokens);
   void captureAllGraphs();
 
@@ -117,6 +130,8 @@ class Scheduler {
   tinytorch::Tensor metaDevI64_;
   tinytorch::Tensor metaHostI32_;
   tinytorch::Tensor metaDevI32_;
+
+  tinytorch::Tensor tpHeaderDev_;
 
   struct PrevStep {
     std::vector<std::shared_ptr<GenSession>> sessions;

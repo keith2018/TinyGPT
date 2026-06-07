@@ -29,6 +29,10 @@ struct ServerConfig {
   int32_t prefillChunkSize = 512;
   int32_t maxGraphBatch = 64;
 
+  // 1 = single gpu
+  int32_t tensorParallelSize = 1;
+  std::string tpInitMethod = "env://";  // env://, tcp://host:port, file://path
+
   std::string chatTemplate;
 };
 

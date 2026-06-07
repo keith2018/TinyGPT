@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Modules.h"
+#include "distributed/Communicator.h"
 #include "engine/ForwardContext.h"
 #include "engine/PagedKVCache.h"
 #include "kernel/AttentionOps.h"
@@ -24,23 +25,27 @@ struct AttentionConfig {
   bool oBias = false;
 };
 
-class Attention : public Module {
+template <typename QKVProjT = MergedLinear, typename OProjT = GemvLinear>
+class AttentionImpl : public Module {
  public:
-  Attention(size_t layerIdx, const AttentionConfig &config, RoPE &&rope, Options options = {})
+  AttentionImpl(size_t layerIdx, const AttentionConfig &config, RoPE &&rope, Options options = {})
       : layerIdx_(layerIdx),
-        numHeads_(config.numHeads),
+        numHeads_(localCount(config.numHeads)),
         headDim_(config.headDim),
-        numKvHeads_(config.numKvHeads),
-        qDim_(config.numHeads * config.headDim),
-        kvDim_(config.numKvHeads * config.headDim),
-        qkvProj_(MergedLinear(config.hiddenSize, {qDim_, kvDim_, kvDim_}, config.qkvBias, options)),
-        oProj_(GemvLinear(qDim_, config.hiddenSize, config.oBias, options)),
+        numKvHeads_(localCount(config.numKvHeads)),
+        qDim_(numHeads_ * config.headDim),
+        kvDim_(numKvHeads_ * config.headDim),
+        qkvProj_(QKVProjT(
+            config.hiddenSize,
+            {config.numHeads * config.headDim, config.numKvHeads * config.headDim, config.numKvHeads * config.headDim},
+            config.qkvBias, options)),
+        oProj_(OProjT(config.numHeads * config.headDim, config.hiddenSize, config.oBias, options)),
         rope_(std::move(rope)) {
     ASSERT(config.numHeads % config.numKvHeads == 0);
     registerSubModules();
   }
 
-  Attention(Attention &&other) noexcept
+  AttentionImpl(AttentionImpl &&other) noexcept
       : layerIdx_(other.layerIdx_),
         numHeads_(other.numHeads_),
         headDim_(other.headDim_),
@@ -50,21 +55,29 @@ class Attention : public Module {
         qkvProj_(std::move(other.qkvProj_)),
         oProj_(std::move(other.oProj_)),
         rope_(std::move(other.rope_)) {
+    this->subModules_.clear();
     registerSubModules();
   }
 
-  Attention &operator=(Attention &&) = delete;
-  Attention(const Attention &) = delete;
-  Attention &operator=(const Attention &) = delete;
+  AttentionImpl &operator=(AttentionImpl &&) = delete;
+  AttentionImpl(const AttentionImpl &) = delete;
+  AttentionImpl &operator=(const AttentionImpl &) = delete;
 
  protected:
   void registerSubModules() {
-    registerModules({
+    this->registerModules({
         {"q_proj", qkvProj_.moduleRefs(0)},
         {"k_proj", qkvProj_.moduleRefs(1)},
         {"v_proj", qkvProj_.moduleRefs(2)},
         {"o_proj", oProj_},
     });
+  }
+
+  // local head count = full / worldSize
+  static int64_t localCount(int64_t full) {
+    int ws = tinygpt::distributed::Communicator::tp().worldSize();
+    ASSERT(full % ws == 0);
+    return full / ws;
   }
 
  public:
@@ -114,58 +127,60 @@ class Attention : public Module {
   int64_t qDim_;
   int64_t kvDim_;
 
-  MergedLinear qkvProj_;
-  GemvLinear oProj_;
+  QKVProjT qkvProj_;
+  OProjT oProj_;
 
   RoPE rope_;
 };
 
-class AttentionWithQKNorm : public Attention {
+template <typename QKVProjT = MergedLinear, typename OProjT = GemvLinear>
+class AttentionWithQKNormImpl : public AttentionImpl<QKVProjT, OProjT> {
  public:
-  AttentionWithQKNorm(size_t layerIdx, const AttentionConfig &config, RoPE &&rope, float rmsNormEps,
-                      Options options = {})
-      : Attention(layerIdx, config, std::move(rope), options),
+  using Base = AttentionImpl<QKVProjT, OProjT>;
+
+  AttentionWithQKNormImpl(size_t layerIdx, const AttentionConfig &config, RoPE &&rope, float rmsNormEps,
+                          Options options = {})
+      : Base(layerIdx, config, std::move(rope), options),
         rmsNormEps_(rmsNormEps),
         qNorm_(RMSNorm({config.headDim}, rmsNormEps, options)),
         kNorm_(RMSNorm({config.headDim}, rmsNormEps, options)) {
     registerQkNorm_Modules();
   }
 
-  AttentionWithQKNorm(AttentionWithQKNorm &&other) noexcept
-      : Attention(std::move(other)),
+  AttentionWithQKNormImpl(AttentionWithQKNormImpl &&other) noexcept
+      : Base(std::move(other)),
         rmsNormEps_(other.rmsNormEps_),
         qNorm_(std::move(other.qNorm_)),
         kNorm_(std::move(other.kNorm_)) {
     registerQkNorm_Modules();
   }
-
-  AttentionWithQKNorm &operator=(AttentionWithQKNorm &&) = delete;
-  AttentionWithQKNorm(const AttentionWithQKNorm &) = delete;
-  AttentionWithQKNorm &operator=(const AttentionWithQKNorm &) = delete;
+  AttentionWithQKNormImpl &operator=(AttentionWithQKNormImpl &&) = delete;
+  AttentionWithQKNormImpl(const AttentionWithQKNormImpl &) = delete;
+  AttentionWithQKNormImpl &operator=(const AttentionWithQKNormImpl &) = delete;
 
   // fuse K-Norm + RoPE(K) + ScatterKV into one kernel
   Tensor forward(const Tensor &input) override {
     auto *ctx = tinygpt::ForwardContext::current();
     ASSERT(ctx != nullptr && ctx->pagedCache != nullptr);
 
-    rope_.to(input.device());
+    this->rope_.to(input.device());
 
     auto total = input.size(0);
 
-    auto qkv = qkvProj_(input);
-    auto qkvSplit = qkv.split({qDim_, kvDim_, kvDim_}, -1);
-    auto queries = qkvSplit[0].view({total, numHeads_, headDim_});
-    auto keys = qkvSplit[1].view({total, numKvHeads_, headDim_});
-    auto values = qkvSplit[2].view({total, numKvHeads_, headDim_});
+    auto qkv = this->qkvProj_(input);
+    auto qkvSplit = qkv.split({this->qDim_, this->kvDim_, this->kvDim_}, -1);
+    auto queries = qkvSplit[0].view({total, this->numHeads_, this->headDim_});
+    auto keys = qkvSplit[1].view({total, this->numKvHeads_, this->headDim_});
+    auto values = qkvSplit[2].view({total, this->numKvHeads_, this->headDim_});
 
     queries = qNorm_(queries);
-    queries = rope_.apply(queries, ctx->positions);
+    queries = this->rope_.apply(queries, ctx->positions);
 
     // fused K-norm + RoPE(K) + scatter KV
-    auto &kPool = ctx->pagedCache->kPool(layerIdx_);
-    auto &vPool = ctx->pagedCache->vPool(layerIdx_);
+    auto &kPool = ctx->pagedCache->kPool(this->layerIdx_);
+    auto &vPool = ctx->pagedCache->vPool(this->layerIdx_);
     tinygpt::kernel::normRopeScatterKVToCache(keys, values, kPool, vPool, ctx->slotMapping, ctx->pageSize,
-                                              rope_.cache(), ctx->positions, kNorm_.weight(), rmsNormEps_);
+                                              this->rope_.cache(), ctx->positions, kNorm_.weight(), rmsNormEps_);
 
     // paged flash attention
     auto attnOutput = tinygpt::kernel::flashAttentionPagedVarLen(
@@ -173,12 +188,12 @@ class AttentionWithQKNorm : public Attention {
         ctx->pageSize, ctx->maxBlocksPerSeq, /*isCausal=*/true, ctx->tmpO, ctx->tmpLse);
     ASSERT(attnOutput.defined());
 
-    return oProj_(attnOutput.reshape({total, qDim_}));
+    return this->oProj_(attnOutput.reshape({total, this->qDim_}));
   }
 
  private:
   void registerQkNorm_Modules() {
-    registerModules({
+    this->registerModules({
         {"q_norm", qNorm_},
         {"k_norm", kNorm_},
     });
@@ -189,5 +204,9 @@ class AttentionWithQKNorm : public Attention {
   RMSNorm qNorm_;
   RMSNorm kNorm_;
 };
+
+// default aliases (single-gpu)
+using Attention = AttentionImpl<MergedLinear, GemvLinear>;
+using AttentionWithQKNorm = AttentionWithQKNormImpl<MergedLinear, GemvLinear>;
 
 }  // namespace tinytorch::nn

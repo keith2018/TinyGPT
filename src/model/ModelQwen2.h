@@ -7,6 +7,7 @@
 #pragma once
 
 #include "GPTModel.h"
+#include "distributed/ParallelLayers.h"
 #include "huggingface/ModelConfig.h"
 #include "layer/Attention.h"
 
@@ -18,7 +19,10 @@ namespace tt = tinytorch;
 
 using Config = huggingface::model::QwenConfig;
 
-using Qwen2ForCausalLM = tt::nn::CausalLM<tt::nn::Attention, tt::nn::GatedMLP>;
+using AttnType = distributed::TPAttention;
+using MLPType = distributed::TPGatedMLP;
+using LMHeadType = distributed::TPLmHead;
+using Qwen2ForCausalLM = tt::nn::CausalLM<AttnType, MLPType, LMHeadType>;
 
 inline std::unique_ptr<Qwen2ForCausalLM> createModel(const Config &config, tt::Options options) {
   int64_t headDim = config.hiddenSize / config.numAttentionHeads;
@@ -29,12 +33,10 @@ inline std::unique_ptr<Qwen2ForCausalLM> createModel(const Config &config, tt::O
 
   auto attnFactory = [&](int64_t layerIdx) {
     auto rope = tt::nn::RoPE(ropeCache);
-    return tt::nn::Attention(static_cast<size_t>(layerIdx), attnConfig, std::move(rope), options);
+    return AttnType(static_cast<size_t>(layerIdx), attnConfig, std::move(rope), options);
   };
 
-  auto mlpFactory = [&](int64_t /*layerIdx*/) {
-    return tt::nn::GatedMLP(config.hiddenSize, config.intermediateSize, options);
-  };
+  auto mlpFactory = [&](int64_t /*layerIdx*/) { return MLPType(config.hiddenSize, config.intermediateSize, options); };
 
   return std::make_unique<Qwen2ForCausalLM>(config.vocabSize, config.hiddenSize, config.numHiddenLayers,
                                             config.rmsNormEps, config.tieWordEmbeddings, options, attnFactory,
@@ -63,7 +65,7 @@ class ModelQwen2 : public GPTModel {
   tinytorch::nn::Module &model() override { return *model_; }
 
  private:
-  std::unique_ptr<tinytorch::nn::CausalLM<tinytorch::nn::Attention, tinytorch::nn::GatedMLP>> model_;
+  std::unique_ptr<qwen2::Qwen2ForCausalLM> model_;
 };
 
 }  // namespace tinygpt

@@ -59,6 +59,32 @@ class GemvLinear : public Linear {
   }
 };
 
+class LmHeadLinear : public Linear {
+ public:
+  LmHeadLinear(int64_t inFeatures, int64_t outFeatures, bool bias = false, Options options = {})
+      : Linear(inFeatures, outFeatures, bias, options) {}
+
+  LmHeadLinear(LmHeadLinear &&other) noexcept : Linear(std::move(other)) {}
+
+  LmHeadLinear &operator=(LmHeadLinear &&other) noexcept {
+    if (this != &other) {
+      Linear::operator=(std::move(other));
+    }
+    return *this;
+  }
+
+  LmHeadLinear(const LmHeadLinear &) = delete;
+  LmHeadLinear &operator=(const LmHeadLinear &) = delete;
+
+  Tensor forward(const Tensor &input) override {
+    // fast path
+    if (input.dim() == 2 && input.size(0) == 1 && input.device().isCuda()) {
+      return tinygpt::kernel::gemvLmHead(input, weight_);
+    }
+    return Linear::forward(input);
+  }
+};
+
 class MergedLinear : public Linear {
  public:
   MergedLinear(int64_t inputSize, IntArrayView outputSizes, bool bias = false, Options options = {})
@@ -83,6 +109,10 @@ class MergedLinear : public Linear {
   MergedLinear &operator=(const MergedLinear &) = delete;
 
   LinearRef &moduleRefs(int64_t idx) { return moduleRefs_[idx]; }
+
+  // raw access for parallel subclasses that need to tag per-segment weights.
+  std::vector<Tensor> &weightSegments() { return weightRefs_; }
+  std::vector<Tensor> &biasSegments() { return biasRefs_; }
 
   Tensor forward(const Tensor &input) override {
     if (!useBias_ && input.dim() == 2 && input.size(0) == 1 && input.device().isCuda()) {

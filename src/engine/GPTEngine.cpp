@@ -8,6 +8,9 @@
 
 #include <utility>
 
+#include "Utils/CUDAUtils.h"
+#include "distributed/Communicator.h"
+
 namespace tt = tinytorch;
 
 namespace tinygpt {
@@ -43,14 +46,36 @@ bool GPTEngine::prepare() {
   }
 
   auto sizing = PagedKVCache::autoSize(*context_.model, config_.dtype, config_.pagedConfig);
-  pagedCache_ =
-      std::make_unique<PagedKVCache>(context_.model->numLayers(), context_.model->numKvHeads(),
-                                     context_.model->headDim(), sizing, tt::Options(config_.device, config_.dtype));
+  // under tp, each rank only holds numKvHeads/worldSize of kv cache
+  const int worldSize = distributed::Communicator::tp().worldSize();
+  const int64_t localKvHeads = context_.model->numKvHeads() / worldSize;
+  ASSERT(context_.model->numKvHeads() % worldSize == 0);
+
+  // broadcast rank0's numBlocks so all ranks agree
+  if (distributed::Communicator::tp().enabled()) {
+    auto opts = tt::Options(config_.device, tt::DType::Int64).noGrad();
+    auto numBlocksDev = tt::Tensor({1}, opts);
+    int64_t hostVal = sizing.numBlocks;
+    auto& stream = tt::cuda::getCurrentCUDAStream(config_.device.index);
+    tt::Storage::copyOnDevice(numBlocksDev.dataPtr<>(), config_.device, &hostVal, tt::Device::cpu(), sizeof(int64_t),
+                              &stream);
+    distributed::Communicator::tp().broadcast(numBlocksDev);
+    tt::Storage::copyOnDevice(&hostVal, tt::Device::cpu(), numBlocksDev.dataPtr<>(), config_.device, sizeof(int64_t),
+                              &stream);
+    stream.synchronize();
+    sizing.numBlocks = hostVal;
+  }
+
+  pagedCache_ = std::make_unique<PagedKVCache>(context_.model->numLayers(), localKvHeads, context_.model->headDim(),
+                                               sizing, tt::Options(config_.device, config_.dtype));
   context_.model->setPagedCache(pagedCache_.get());
 
-  scheduler_ = std::make_unique<Scheduler>(*context_.model, *pagedCache_, *context_.tokenizer, baseEosTokenIds_,
-                                           config_.maxBatchTokens, config_.prefillChunkSize, config_.maxGraphBatch);
-  scheduler_->start();
+  // only rank 0 owns the scheduler; other ranks run WorkerRuntime externally.
+  if (distributed::Communicator::tp().rank() == 0) {
+    scheduler_ = std::make_unique<Scheduler>(*context_.model, *pagedCache_, *context_.tokenizer, baseEosTokenIds_,
+                                             config_.maxBatchTokens, config_.prefillChunkSize, config_.maxGraphBatch);
+    scheduler_->start();
+  }
   return true;
 }
 

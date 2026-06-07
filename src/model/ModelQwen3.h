@@ -7,6 +7,7 @@
 #pragma once
 
 #include "GPTModel.h"
+#include "distributed/ParallelLayers.h"
 #include "huggingface/ModelConfig.h"
 #include "layer/Attention.h"
 
@@ -18,7 +19,10 @@ namespace tt = tinytorch;
 
 using Config = huggingface::model::QwenConfig;
 
-using Qwen3ForCausalLM = tt::nn::CausalLM<tt::nn::AttentionWithQKNorm, tt::nn::GatedMLP>;
+using AttnType = distributed::TPAttentionWithQKNorm;
+using MLPType = distributed::TPGatedMLP;
+using LMHeadType = distributed::TPLmHead;
+using Qwen3ForCausalLM = tt::nn::CausalLM<AttnType, MLPType, LMHeadType>;
 
 inline std::unique_ptr<Qwen3ForCausalLM> createModel(const Config &config, tt::Options options) {
   tt::nn::AttentionConfig attnConfig{config.hiddenSize, config.numAttentionHeads, config.headDim,
@@ -29,13 +33,10 @@ inline std::unique_ptr<Qwen3ForCausalLM> createModel(const Config &config, tt::O
 
   auto attnFactory = [&](int64_t layerIdx) {
     auto rope = tt::nn::RoPE(ropeCache);
-    return tt::nn::AttentionWithQKNorm(static_cast<size_t>(layerIdx), attnConfig, std::move(rope), config.rmsNormEps,
-                                       options);
+    return AttnType(static_cast<size_t>(layerIdx), attnConfig, std::move(rope), config.rmsNormEps, options);
   };
 
-  auto mlpFactory = [&](int64_t /*layerIdx*/) {
-    return tt::nn::GatedMLP(config.hiddenSize, config.intermediateSize, options);
-  };
+  auto mlpFactory = [&](int64_t /*layerIdx*/) { return MLPType(config.hiddenSize, config.intermediateSize, options); };
 
   return std::make_unique<Qwen3ForCausalLM>(config.vocabSize, config.hiddenSize, config.numHiddenLayers,
                                             config.rmsNormEps, config.tieWordEmbeddings, options, attnFactory,
@@ -63,7 +64,7 @@ class ModelQwen3 : public GPTModel {
   tinytorch::nn::Module &model() override { return *model_; }
 
  private:
-  std::unique_ptr<tinytorch::nn::CausalLM<tinytorch::nn::AttentionWithQKNorm, tinytorch::nn::GatedMLP>> model_;
+  std::unique_ptr<qwen3::Qwen3ForCausalLM> model_;
 };
 
 }  // namespace tinygpt
